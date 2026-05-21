@@ -18,6 +18,12 @@ from .animate import build_animated_html, render_animation, ANIMATION_EFFECTS
 from .annotate import analyze_code, build_annotated_html
 from .auth import APIKeyMiddleware, key_store, rate_limiter, create_default_key
 from .billing import create_checkout_session, create_lifetime_checkout, handle_webhook, get_key_for_session
+from .users import (
+    create_user, authenticate, get_user, get_user_by_email, list_users,
+    create_token, verify_token, create_user_api_key, get_user_api_keys,
+    get_user_usage, get_admin_stats, log_usage, UserCreate, UserLogin,
+    update_user_plan,
+)
 
 app = FastAPI(
     title="CodeShot API",
@@ -522,6 +528,263 @@ async def billing_success(session_id: str = ""):
         </div></body></html>""")
     
     return HTMLResponse("<h1>Payment confirmed!</h1><p>Your API key has been generated. Check your email.</p>")
+
+
+# ── User auth endpoints ──
+
+@app.post("/v1/auth/register")
+async def auth_register(data: UserCreate):
+    """Register a new user account."""
+    try:
+        user = create_user(data.email, data.password, data.name)
+        token = create_token(user["id"])
+        return {"token": token, "user": {"email": user["email"], "name": user["name"], "plan": user["plan"]}}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/v1/auth/login")
+async def auth_login(data: UserLogin):
+    """Login and get a JWT token."""
+    user = authenticate(data.email, data.password)
+    if not user:
+        raise HTTPException(401, "Invalid email or password")
+    token = create_token(user["id"])
+    return {"token": token, "user": {"email": user["email"], "name": user["name"], "plan": user["plan"]}}
+
+
+@app.get("/v1/me")
+async def user_me(request: Request):
+    """Get current user info, API keys, and usage stats."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(401, "Authentication required")
+    token = auth_header[7:]
+    user_id = verify_token(token)
+    if not user_id:
+        raise HTTPException(401, "Invalid or expired token")
+    
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    
+    keys = get_user_api_keys(user_id)
+    usage = get_user_usage(user_id)
+    
+    return {
+        "user": {"email": user["email"], "name": user["name"], "plan": user["plan"]},
+        "api_keys": keys,
+        "usage": usage,
+    }
+
+
+@app.post("/v1/me/keys")
+async def user_create_key(request: Request, name: str = "default"):
+    """Create a new API key for the authenticated user."""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    user_id = verify_token(token)
+    if not user_id:
+        raise HTTPException(401, "Invalid token")
+    
+    user = get_user(user_id)
+    raw_key = create_user_api_key(user_id, name, user["plan"])
+    return {"key": raw_key, "name": name, "plan": user["plan"]}
+
+
+# ── Dashboard pages ──
+
+@app.get("/dashboard")
+async def user_dashboard():
+    """User dashboard HTML page."""
+    return HTMLResponse("""
+<!DOCTYPE html><html><head><title>CodeShot — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui;background:#0a0a0a;color:#e2e8f0;min-height:100vh}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;background:#111827;border-bottom:1px solid #1e293b}
+.nav h1{font-size:18px;color:#f8fafc}
+.nav a{color:#3b82f6;text-decoration:none;font-size:14px}
+.container{max-width:900px;margin:0 auto;padding:32px 24px}
+.card{background:#111827;border:1px solid #1e293b;border-radius:12px;padding:24px;margin-bottom:20px}
+.card h2{font-size:16px;color:#f8fafc;margin-bottom:16px}
+.stats{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.stat{flex:1;min-width:120px;background:#0f172a;border-radius:8px;padding:16px;text-align:center}
+.stat-num{font-size:24px;font-weight:800;color:#3b82f6}
+.stat-label{font-size:12px;color:#64748b;margin-top:4px}
+.key-row{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#0f172a;border-radius:8px;margin-bottom:8px;font-family:monospace;font-size:14px}
+.key-row .name{color:#e2e8f0}
+.key-row .plan{color:#10b981;font-size:12px}
+.btn{padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;border:none;cursor:pointer;transition:.2s}
+.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-secondary{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;color:#94a3b8;margin-bottom:6px}
+.form-group input{width:100%;padding:10px 14px;background:#0f172a;border:1px solid #1e293b;border-radius:8px;color:#e2e8f0;font-size:14px;font-family:monospace}
+.hidden{display:none}
+.error{color:#ef4444;font-size:13px;margin-top:8px}
+.success{color:#10b981;font-size:13px;margin-top:8px}
+</style></head><body>
+<div class="nav">
+  <h1>⚡ CodeShot Dashboard</h1>
+  <div>
+    <span id="userEmail" style="color:#64748b;font-size:13px;margin-right:16px"></span>
+    <a href="/docs">API Docs</a>
+  </div>
+</div>
+<div class="container">
+  <div id="loginForm" class="card">
+    <h2>Login or Register</h2>
+    <div class="form-group"><label>Email</label><input type="email" id="email" placeholder="you@example.com"></div>
+    <div class="form-group"><label>Password</label><input type="password" id="password" placeholder="Min 6 characters"></div>
+    <div style="display:flex;gap:12px">
+      <button class="btn btn-primary" onclick="login()">Login</button>
+      <button class="btn btn-secondary" onclick="register()">Register</button>
+    </div>
+    <div id="authError" class="error"></div>
+  </div>
+  
+  <div id="dashboardView" class="hidden">
+    <div class="stats" id="usageStats"></div>
+    
+    <div class="card">
+      <h2>Your API Keys</h2>
+      <div id="keyList"></div>
+      <button class="btn btn-primary" onclick="createKey()" style="margin-top:12px">+ New API Key</button>
+      <div id="newKey" class="success" style="margin-top:8px"></div>
+    </div>
+    
+    <div class="card">
+      <h2>Quick Test</h2>
+      <div style="font-family:monospace;font-size:13px;color:#64748b;margin-bottom:8px">
+        curl -X POST https://codeshot-api-production.up.railway.app/v1/screenshot \\
+        <br>  -H "Authorization: Bearer <span style="color:#3b82f6">YOUR_KEY</span>" \\
+        <br>  -H "Content-Type: application/json" \\
+        <br>  -d '{"code":"print(42)","language":"python","theme":"dracula"}'
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const API = '/v1';
+let token = localStorage.getItem('codeshot_token');
+if (token) checkAuth();
+
+async function login() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  try {
+    const resp = await fetch(API+'/auth/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+    const data = await resp.json();
+    if (resp.ok) { token = data.token; localStorage.setItem('codeshot_token', token); showDashboard(data.user); }
+    else document.getElementById('authError').textContent = data.detail || 'Login failed';
+  } catch(e) { document.getElementById('authError').textContent = 'Network error'; }
+}
+
+async function register() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  try {
+    const resp = await fetch(API+'/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+    const data = await resp.json();
+    if (resp.ok) { token = data.token; localStorage.setItem('codeshot_token', token); showDashboard(data.user); }
+    else document.getElementById('authError').textContent = data.detail || 'Registration failed';
+  } catch(e) { document.getElementById('authError').textContent = 'Network error'; }
+}
+
+async function checkAuth() {
+  try {
+    const resp = await fetch(API+'/me', {headers:{'Authorization':'Bearer '+token}});
+    const data = await resp.json();
+    if (resp.ok) showDashboard(data.user, data);
+    else { localStorage.removeItem('codeshot_token'); }
+  } catch(e) {}
+}
+
+function showDashboard(user, data) {
+  document.getElementById('loginForm').classList.add('hidden');
+  document.getElementById('dashboardView').classList.remove('hidden');
+  document.getElementById('userEmail').textContent = user.email;
+  if (data) {
+    document.getElementById('usageStats').innerHTML = `
+      <div class="stat"><div class="stat-num">${data.usage.hourly}</div><div class="stat-label">Requests (hour)</div></div>
+      <div class="stat"><div class="stat-num">${data.usage.daily}</div><div class="stat-label">Requests (day)</div></div>
+      <div class="stat"><div class="stat-num">${data.usage.total}</div><div class="stat-label">Total</div></div>
+      <div class="stat"><div class="stat-num" style="color:#10b981">${user.plan.toUpperCase()}</div><div class="stat-label">Plan</div></div>
+    `;
+    document.getElementById('keyList').innerHTML = data.api_keys.map(k => 
+      `<div class="key-row"><span class="name">${k.name}</span><span class="plan">${k.plan}</span></div>`
+    ).join('') || '<p style="color:#64748b;font-size:14px">No API keys yet. Create one below.</p>';
+  }
+}
+
+async function createKey() {
+  try {
+    const resp = await fetch(API+'/me/keys?name=my-key', {method:'POST',headers:{'Authorization':'Bearer '+token}});
+    const data = await resp.json();
+    if (resp.ok) {
+      document.getElementById('newKey').textContent = '✅ New key: ' + data.key + ' (save this — it won\\'t be shown again)';
+      checkAuth();
+    }
+  } catch(e) {}
+}
+</script></body></html>""")
+
+
+@app.get("/admin")
+async def admin_dashboard():
+    """Admin dashboard HTML page."""
+    stats = get_admin_stats()
+    users = list_users()
+    
+    user_rows = ""
+    for u in users:
+        user_rows += f"""<tr>
+            <td>{u['email']}</td>
+            <td>{u.get('name','—')}</td>
+            <td style="color:{'#10b981' if u['plan']=='pro' else '#f59e0b' if u['plan']=='team' else '#8b5cf6' if u['plan']=='business' else '#64748b'}">{u['plan'].upper()}</td>
+            <td>{u.get('last_login','—') and '✓' or '—'}</td>
+        </tr>"""
+    
+    return HTMLResponse(f"""
+<!DOCTYPE html><html><head><title>CodeShot — Admin</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:system-ui;background:#0a0a0a;color:#e2e8f0;min-height:100vh}}
+.nav{{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;background:#111827;border-bottom:1px solid #1e293b}}
+.nav h1{{font-size:18px;color:#f8fafc}}
+.container{{max-width:1000px;margin:0 auto;padding:32px 24px}}
+.stats{{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px}}
+.stat{{flex:1;min-width:150px;background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px;text-align:center}}
+.stat-num{{font-size:28px;font-weight:800;color:#3b82f6}}
+.stat-label{{font-size:12px;color:#64748b;margin-top:6px;text-transform:uppercase;letter-spacing:0.5px}}
+.card{{background:#111827;border:1px solid #1e293b;border-radius:12px;padding:24px;margin-bottom:20px}}
+.card h2{{font-size:16px;color:#f8fafc;margin-bottom:16px}}
+table{{width:100%;border-collapse:collapse;font-size:14px}}
+th,td{{padding:12px 16px;text-align:left;border-bottom:1px solid #1e293b}}
+th{{color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}}
+.plan-badges{{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}}
+.plan-badge{{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}}
+</style></head><body>
+<div class="nav"><h1>⚡ CodeShot Admin</h1><a href="/dashboard" style="color:#3b82f6;text-decoration:none;font-size:14px">User Dashboard →</a></div>
+<div class="container">
+  <div class="stats">
+    <div class="stat"><div class="stat-num">{stats['total_users']}</div><div class="stat-label">Total Users</div></div>
+    <div class="stat"><div class="stat-num">{stats['total_keys']}</div><div class="stat-label">API Keys</div></div>
+    <div class="stat"><div class="stat-num">{stats['today_requests']}</div><div class="stat-label">Requests Today</div></div>
+  </div>
+  <div class="plan-badges">
+    {''.join(f'<span class="plan-badge" style="background:#1e293b;color:#94a3b8">{p}: {c}</span>' for p,c in stats.get('plans',{}).items())}
+  </div>
+  <div class="card" style="margin-top:24px">
+    <h2>Users</h2>
+    <table>
+      <tr><th>Email</th><th>Name</th><th>Plan</th><th>Logged In</th></tr>
+      {user_rows}
+    </table>
+  </div>
+</div></body></html>""")
 
 
 # ── Admin endpoints ──

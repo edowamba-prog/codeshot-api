@@ -190,10 +190,19 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         
         if not allowed:
             return JSONResponse(
-                {"detail": "Rate limit exceeded. Upgrade at https://codeshot.io/pricing"},
+                {"detail": "Rate limit exceeded. Upgrade at https://codeshot-api.com/dashboard"},
                 status_code=429,
                 headers=headers
             )
+        
+        # Log usage to SQLite
+        try:
+            from .users import log_usage
+            import hashlib
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+            log_usage(key_hash, path)
+        except Exception:
+            pass  # Don't block the request if logging fails
         
         # Proceed
         response = await call_next(request)
