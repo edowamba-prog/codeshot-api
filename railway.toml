@@ -1,0 +1,17 @@
+# Railway deployment config
+# Docs: https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+
+[service]
+name = "codeshot-api"
+
+# Railway auto-detects Dockerfile and exposes port 8000
+# via EXPOSE 8000 in the Dockerfile
