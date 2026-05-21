@@ -1,38 +1,30 @@
-# CodeShot API — Production Dockerfile
-# Single-stage for Railway/Fly.io simplicity
+# CodeShot API — Railway-optimized Dockerfile
 
-FROM python:3.12-slim
+FROM python:3.12-slim AS base
 
 WORKDIR /app
 
-# Install system deps for Playwright + ffmpeg + curl (for healthcheck)
+# System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget curl ca-certificates fonts-liberation ffmpeg \
+    wget ca-certificates fonts-liberation ffmpeg \
     libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 \
     libgbm1 libgtk-3-0 libnspr4 libnss3 libx11-xcb1 libxcomposite1 \
     libxdamage1 libxfixes3 libxrandr2 xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps
+# Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright Chromium
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
-RUN python3 -m playwright install --with-deps chromium
-
-# Copy app
+# App code
 COPY app/ ./app/
-
-# Create non-root user with access to browsers
-RUN useradd -m -s /bin/bash app \
-    && chown -R app:app /app /opt/playwright-browsers
-
-USER app
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8000
 
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
+ENV PLAYWRIGHT_BROWSERS_PATH=/tmp/pw-browsers
 
-CMD ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/entrypoint.sh"]
