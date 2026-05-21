@@ -159,7 +159,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         
         # Skip auth for public paths and static files
-        if path in PUBLIC_PATHS or path.startswith("/static") or path.startswith("/v1/admin"):
+        if path in PUBLIC_PATHS or path.startswith("/static") or path.startswith("/v1/admin") or path.startswith("/v1/billing"):
             return await call_next(request)
         
         # Check API key

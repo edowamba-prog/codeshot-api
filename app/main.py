@@ -2,7 +2,7 @@
 CodeShot API — Beautiful code screenshots via REST API.
 """
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import Response, HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
@@ -17,6 +17,7 @@ from .diff import build_diff_html, compute_diff, count_changes
 from .animate import build_animated_html, render_animation, ANIMATION_EFFECTS
 from .annotate import analyze_code, build_annotated_html
 from .auth import APIKeyMiddleware, key_store, rate_limiter, create_default_key
+from .billing import create_checkout_session, create_lifetime_checkout, handle_webhook, get_key_for_session
 
 app = FastAPI(
     title="CodeShot API",
@@ -466,6 +467,61 @@ async def create_annotation(req: AnnotateRequest):
 async def health():
     """Health check endpoint."""
     return {"status": "ok", "service": "codeshot-api"}
+
+
+# ── Billing endpoints ──
+
+@app.post("/v1/billing/checkout")
+async def billing_checkout(plan: str = "pro"):
+    """Create a Stripe Checkout session. Returns URL to redirect user to."""
+    try:
+        result = await create_checkout_session(plan)
+        return result
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/v1/billing/checkout-lifetime")
+async def billing_lifetime():
+    """Create a one-time payment checkout for lifetime Pro access ($49)."""
+    try:
+        result = await create_lifetime_checkout()
+        return result
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/v1/billing/webhook")
+async def billing_webhook(request: Request):
+    """Stripe webhook endpoint. Processes checkout.session.completed events."""
+    payload = await request.body()
+    signature = request.headers.get("stripe-signature", "")
+    result = await handle_webhook(payload, signature)
+    return result
+
+
+@app.get("/v1/billing/success")
+async def billing_success(session_id: str = ""):
+    """Success page shown after Stripe payment. Shows the generated API key."""
+    if not session_id:
+        return HTMLResponse("<h1>Payment confirmed!</h1><p>Check your email for API key.</p>")
+    
+    key_data = await get_key_for_session(session_id)
+    if key_data:
+        return HTMLResponse(f"""
+        <!DOCTYPE html><html><head><title>CodeShot — API Key</title>
+        <style>body{{font-family:system-ui;background:#0a0a0a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}} .card{{background:#111827;border:1px solid #1e293b;border-radius:12px;padding:40px;max-width:500px;text-align:center}} h1{{color:#f8fafc;margin-bottom:8px}} .key{{background:#1e293b;color:#3b82f6;padding:16px 24px;border-radius:8px;font-family:monospace;font-size:18px;margin:24px 0;word-break:break-all}} .plan{{color:#10b981;font-weight:600}} p{{color:#94a3b8;margin:8px 0}}</style></head><body>
+        <div class="card">
+          <h1>🎉 Payment Confirmed</h1>
+          <p class="plan">{key_data['plan'].upper()} Plan</p>
+          <p>Here's your API key. Save it — it won't be shown again.</p>
+          <div class="key">{key_data['api_key']}</div>
+          <p>Use it in the Authorization header:</p>
+          <p style="font-family:monospace;color:#64748b">Bearer {key_data['api_key']}</p>
+          <p style="margin-top:24px"><a href="/docs" style="color:#3b82f6">View API Docs →</a></p>
+        </div></body></html>""")
+    
+    return HTMLResponse("<h1>Payment confirmed!</h1><p>Your API key has been generated. Check your email.</p>")
 
 
 # ── Admin endpoints ──
