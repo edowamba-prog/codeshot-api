@@ -385,7 +385,7 @@
           <li>GIF/MP4 animation</li>
           <li>AI annotations (50/day)</li>
         </ul>
-        <a href="https://buy.stripe.com/pro" class="btn btn-primary">Upgrade →</a>
+        <a href="#" class="btn btn-primary" onclick="checkout('pro')">Subscribe →</a>
       </div>
       <div class="plan">
         <div class="plan-name">Team</div>
@@ -399,7 +399,7 @@
           <li>AI annotations (500/day)</li>
           <li>Priority rendering</li>
         </ul>
-        <a href="https://buy.stripe.com/team" class="btn btn-secondary">Upgrade →</a>
+        <a href="#" class="btn btn-secondary" onclick="checkout('team')">Subscribe →</a>
       </div>
       <div class="plan">
         <div class="plan-name">Business</div>
@@ -413,7 +413,7 @@
           <li>Unlimited AI annotations</li>
           <li>Dedicated support</li>
         </ul>
-        <a href="mailto:hello@codeshot.io" class="btn btn-secondary">Contact Us</a>
+        <a href="#" class="btn btn-secondary" onclick="checkout('business')">Subscribe →</a>
       </div>
     </div>
   </div>
@@ -429,5 +429,23 @@
   </div>
 </footer>
 
-</body>
+<script>
+async function checkout(plan) {
+  const btn = event.target;
+  btn.textContent = 'Redirecting...';
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/v1/billing/checkout?plan=' + plan, {method:'POST'});
+    const data = await resp.json();
+    if (data.url) window.location.href = data.url;
+    else alert('Checkout unavailable. Please try again.');
+  } catch(e) {
+    alert('Checkout unavailable. Please try again.');
+    btn.textContent = 'Subscribe →';
+    btn.disabled = false;
+  }
+}
+</script>
+
+</body></html>
 </html>
