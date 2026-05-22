@@ -57,7 +57,7 @@ def build_openapi_payment_info(path: str) -> dict:
     price = AGENT_PRICES.get(path, "0.01")
     return {
         "x-payment-info": {
-            "protocols": ["x402"],
+            "protocols": [{"x402": {}}],
             "price": {
                 "mode": "fixed",
                 "currency": "USD",
