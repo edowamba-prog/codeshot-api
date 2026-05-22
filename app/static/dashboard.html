@@ -1,0 +1,405 @@
+<!DOCTYPE html><html><head><title>CodeShot — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui;background:#0a0a0a;color:#e2e8f0;min-height:100vh}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:12px 24px;background:#111827;border-bottom:1px solid #1e293b;position:sticky;top:0;z-index:100}
+.nav-brand{font-size:16px;font-weight:700;color:#f8fafc;text-decoration:none}
+.nav-brand span{color:#3b82f6}
+.nav-links{display:flex;gap:6px;align-items:center}
+.nav-links a,.nav-links button{color:#94a3b8;text-decoration:none;font-size:13px;padding:6px 14px;border-radius:6px;transition:.2s;background:none;border:none;cursor:pointer}
+.nav-links a:hover,.nav-links button:hover{color:#e2e8f0;background:#1e293b}
+.nav-links .active{color:#3b82f6;background:#1e3a5f}
+.plan-badge{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;text-transform:uppercase}
+.plan-free{background:#1e293b;color:#64748b}
+.plan-pro{background:#065f46;color:#10b981}
+.plan-team{background:#451a03;color:#f59e0b}
+.plan-business{background:#1e1b4b;color:#8b5cf6}
+.container{max-width:960px;margin:0 auto;padding:24px}
+.card{background:#111827;border:1px solid #1e293b;border-radius:12px;padding:24px;margin-bottom:20px}
+.card h2{font-size:16px;color:#f8fafc;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.card h3{font-size:14px;color:#94a3b8;margin-bottom:12px}
+.stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.stat{flex:1;min-width:130px;background:#0f172a;border-radius:10px;padding:18px;text-align:center}
+.stat-num{font-size:26px;font-weight:800;color:#3b82f6}
+.stat-label{font-size:11px;color:#64748b;margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+.chart-wrap{width:100%;overflow-x:auto;padding-bottom:8px}
+.chart-wrap canvas{max-width:100%}
+.bar-chart{display:flex;align-items:flex-end;gap:3px;height:140px;padding:0 4px}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:14px}
+.bar{width:100%;background:#3b82f6;border-radius:2px 2px 0 0;min-height:2px;transition:height .3s}
+.bar-label{font-size:9px;color:#64748b;margin-top:6px;transform:rotate(-45deg);transform-origin:top left;white-space:nowrap}
+.key-row{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#0f172a;border-radius:8px;margin-bottom:8px;font-family:monospace;font-size:13px}
+.key-row .name{color:#e2e8f0}
+.key-row .key-meta{display:flex;gap:8px;align-items:center}
+.key-row .key-plan{color:#10b981;font-size:11px}
+.btn{padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;border:none;cursor:pointer;transition:.2s;text-decoration:none;display:inline-block}
+.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-secondary{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
+.btn-secondary:hover{background:#334155}
+.btn-danger{background:#7f1d1d;color:#fca5a5}.btn-danger:hover{background:#991b1b}
+.btn-sm{padding:5px 12px;font-size:11px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;color:#94a3b8;margin-bottom:6px}
+.form-group input{width:100%;padding:10px 14px;background:#0f172a;border:1px solid #1e293b;border-radius:8px;color:#e2e8f0;font-size:14px;font-family:monospace}
+.form-group input:focus{outline:none;border-color:#3b82f6}
+.form-row{display:flex;gap:12px}
+.hidden{display:none !important}
+.error{color:#ef4444;font-size:13px;margin-top:8px}
+.success{color:#10b981;font-size:13px;margin-top:8px}
+.pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.plan-card{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:24px 20px;text-align:center;transition:.2s}
+.plan-card:hover{border-color:#334155}
+.plan-card.current{border-color:#3b82f6;background:#0d1525}
+.plan-card .plan-name{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.plan-card .plan-price{font-size:28px;font-weight:800;color:#f8fafc;margin-bottom:4px}
+.plan-card .plan-period{font-size:12px;color:#64748b;margin-bottom:16px}
+.plan-card ul{list-style:none;text-align:left;font-size:12px;color:#94a3b8;margin-bottom:16px;line-height:2}
+.plan-card ul li::before{content:"✓ ";color:#10b981}
+.current-badge{display:inline-block;background:#065f46;color:#10b981;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;margin-top:8px}
+.curl-block{background:#0f172a;border-radius:8px;padding:16px 20px;font-family:monospace;font-size:12px;color:#64748b;overflow-x:auto;white-space:pre-wrap;line-height:1.7}
+.curl-block .hl{color:#3b82f6}
+.copy-btn{float:right;padding:4px 10px;font-size:11px;cursor:pointer;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:4px}
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;animation:slideUp .3s ease-out}
+.toast-success{background:#065f46;color:#10b981}.toast-error{background:#7f1d1d;color:#fca5a5}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.agent-box{background:#0d1525;border:1px solid #1e3a5f;border-radius:10px;padding:20px;margin-top:16px}
+.agent-box h4{color:#3b82f6;font-size:13px;margin-bottom:10px}
+.agent-box code{display:block;background:#0a0a0a;color:#94a3b8;font-size:12px;padding:12px 16px;border-radius:6px;white-space:pre-wrap;margin:8px 0;overflow-x:auto}
+@media(max-width:640px){.nav-links{gap:2px}.nav-links a,.nav-links button{font-size:11px;padding:5px 8px}.pricing-grid{grid-template-columns:1fr}}
+</style></head><body>
+
+<nav class="nav">
+  <a href="/" class="nav-brand"><span>⚡</span> CodeShot</a>
+  <div class="nav-links" id="navLinks">
+    <a href="/" id="navHome">Home</a>
+    <a href="/dashboard" id="navDash" class="active">Dashboard</a>
+    <a href="/docs">API Docs</a>
+    <span id="navPlanBadge"></span>
+    <button id="navUpgrade" class="hidden" onclick="scrollToUpgrade()">Upgrade</button>
+    <button id="navLogout" class="btn-sm btn-danger hidden" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Login/Register -->
+  <div id="loginForm" class="card">
+    <h2>Welcome to CodeShot</h2>
+    <p style="color:#64748b;font-size:13px;margin-bottom:20px">Create an account or login to manage your API keys and monitor usage.</p>
+    <div class="form-group"><label>Email</label><input type="email" id="email" placeholder="you@example.com" autocomplete="email"></div>
+    <div class="form-group"><label>Password (min 6 chars)</label><input type="password" id="password" placeholder="••••••" autocomplete="current-password"></div>
+    <div class="form-group hidden" id="nameGroup"><label>Name (optional)</label><input type="text" id="name" placeholder="Your name"></div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <button class="btn btn-primary" onclick="login()">Login</button>
+      <button class="btn btn-secondary" onclick="toggleRegister()" id="toggleRegBtn">or Register</button>
+      <span style="color:#64748b;font-size:12px;margin-left:auto" id="regHint"></span>
+    </div>
+    <div id="authError" class="error"></div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboardView" class="hidden">
+
+    <!-- Usage stats -->
+    <div class="card">
+      <h2>Usage <span style="font-weight:400;font-size:12px;color:#64748b">Last 30 days</span></h2>
+      <div class="stats" id="usageStats"></div>
+      <div class="bar-chart" id="usageChart" style="margin-top:8px"></div>
+    </div>
+
+    <!-- API Keys -->
+    <div class="card">
+      <h2>API Keys <button class="btn btn-sm btn-primary" onclick="createKey()">+ New Key</button></h2>
+      <div id="keyList"><p style="color:#64748b;font-size:13px">No API keys yet.</p></div>
+      <div id="newKeyMsg" class="success" style="margin-top:8px"></div>
+    </div>
+
+    <!-- Quick test -->
+    <div class="card">
+      <h2>Quick Test <button class="copy-btn" onclick="copyCurl()">Copy</button></h2>
+      <div class="curl-block" id="curlBlock">
+curl -X POST https://drmadmeow.up.railway.app/v1/screenshot \
+  -H <span class="hl">"Authorization: Bearer YOUR_KEY"</span> \
+  -H "Content-Type: application/json" \
+  -d '{"code":"print(42)","language":"python","theme":"dracula"}'
+      </div>
+    </div>
+
+    <!-- Upgrade -->
+    <div class="card" id="upgradeSection">
+      <h2>Upgrade Plan</h2>
+      <div class="pricing-grid">
+        <div class="plan-card" id="planFree">
+          <div class="plan-name">Free</div><div class="plan-price">$0</div><div class="plan-period">forever</div>
+          <ul><li>50 req/hour</li><li>200 req/day</li><li>3 themes</li><li>Basic screenshots</li></ul>
+          <span class="current-badge hidden" id="currentFree">Current Plan</span>
+        </div>
+        <div class="plan-card" id="planPro">
+          <div class="plan-name">Pro</div><div class="plan-price">$10</div><div class="plan-period">/month</div>
+          <ul><li>1,000 req/hour</li><li>10,000 req/day</li><li>All 10 themes</li><li>Brand kits</li><li>Diff + Animation</li><li>AI annotations</li></ul>
+          <button class="btn btn-primary btn-sm hidden" id="upgradePro" onclick="doUpgrade('pro')">Upgrade →</button>
+          <span class="current-badge hidden" id="currentPro">Current Plan</span>
+        </div>
+        <div class="plan-card" id="planTeam">
+          <div class="plan-name">Team</div><div class="plan-price">$30</div><div class="plan-period">/month</div>
+          <ul><li>5,000 req/hour</li><li>50,000 req/day</li><li>Team brand libraries</li><li>500 AI annotations/day</li><li>Priority queue</li></ul>
+          <button class="btn btn-primary btn-sm hidden" id="upgradeTeam" onclick="doUpgrade('team')">Upgrade →</button>
+          <span class="current-badge hidden" id="currentTeam">Current Plan</span>
+        </div>
+        <div class="plan-card" id="planBusiness">
+          <div class="plan-name">Business</div><div class="plan-price">$100</div><div class="plan-period">/month</div>
+          <ul><li>20,000 req/hour</li><li>Unlimited daily</li><li>White-label</li><li>Custom themes</li><li>Priority support</li></ul>
+          <button class="btn btn-primary btn-sm hidden" id="upgradeBusiness" onclick="doUpgrade('business')">Upgrade →</button>
+          <span class="current-badge hidden" id="currentBusiness">Current Plan</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agent section -->
+    <div class="card">
+      <h2>🤖 For AI Agents</h2>
+      <p style="color:#64748b;font-size:13px;margin-bottom:12px">Your API is agent-friendly. AI assistants can register and get keys programmatically:</p>
+      <div class="agent-box">
+        <h4>One-shot: Register + Get API Key</h4>
+        <code>curl -X POST https://drmadmeow.up.railway.app/v1/auth/api-key \
+  -H "Content-Type: application/json" \
+  -d '{"email":"agent@example.com","password":"••••••"}'</code>
+        <p style="color:#64748b;font-size:11px;margin-top:8px">Returns: {"api_key": "cs_...", "token": "...", "plan": "free"}</p>
+      </div>
+      <div class="agent-box" style="margin-top:12px">
+        <h4>Check Usage</h4>
+        <code>curl -H "Authorization: Bearer YOUR_JWT" \
+  https://drmadmeow.up.railway.app/v1/me</code>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '/v1';
+let token = localStorage.getItem('codeshot_token');
+let currentPlan = 'free';
+let isRegisterMode = false;
+
+if (token) checkAuth();
+
+async function login() {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  if (!email || !password) { showError('Email and password required'); return; }
+  
+  const endpoint = isRegisterMode ? '/auth/register' : '/auth/login';
+  const body = isRegisterMode 
+    ? {email, password, name: document.getElementById('name').value || undefined}
+    : {email, password};
+  
+  try {
+    const resp = await fetch(API+endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data = await resp.json();
+    if (resp.ok) {
+      token = data.token;
+      localStorage.setItem('codeshot_token', token);
+      document.getElementById('authError').textContent = '';
+      await loadDashboard();
+    } else {
+      showError(data.detail || 'Authentication failed');
+    }
+  } catch(e) { showError('Network error — is the server running?'); }
+}
+
+function toggleRegister() {
+  isRegisterMode = !isRegisterMode;
+  document.getElementById('nameGroup').classList.toggle('hidden', !isRegisterMode);
+  document.getElementById('toggleRegBtn').textContent = isRegisterMode ? 'or Login' : 'or Register';
+  document.getElementById('regHint').textContent = isRegisterMode ? 'New account — free plan' : '';
+  document.getElementById('authError').textContent = '';
+}
+
+function showError(msg) {
+  document.getElementById('authError').textContent = msg;
+}
+
+async function checkAuth() {
+  try {
+    const resp = await fetch(API+'/me', {headers:{'Authorization':'Bearer '+token}});
+    if (resp.ok) {
+      const data = await resp.json();
+      await loadDashboard();
+    } else {
+      localStorage.removeItem('codeshot_token');
+      token = null;
+    }
+  } catch(e) {}
+}
+
+async function loadDashboard() {
+  document.getElementById('loginForm').classList.add('hidden');
+  document.getElementById('dashboardView').classList.remove('hidden');
+  
+  // Show nav elements
+  document.getElementById('navLogout').classList.remove('hidden');
+  document.getElementById('navUpgrade').classList.remove('hidden');
+  
+  try {
+    const resp = await fetch(API+'/me', {headers:{'Authorization':'Bearer '+token}});
+    const data = await resp.json();
+    if (!resp.ok) { logout(); return; }
+    
+    currentPlan = data.user.plan || 'free';
+    
+    // Plan badge in nav
+    const badge = document.getElementById('navPlanBadge');
+    badge.className = 'plan-badge plan-'+currentPlan;
+    badge.textContent = currentPlan.toUpperCase();
+    badge.classList.remove('hidden');
+    
+    // Usage stats
+    document.getElementById('usageStats').innerHTML = `
+      <div class="stat"><div class="stat-num">${data.usage.hourly}</div><div class="stat-label">Requests (hour)</div></div>
+      <div class="stat"><div class="stat-num">${data.usage.daily}</div><div class="stat-label">Requests (day)</div></div>
+      <div class="stat"><div class="stat-num">${data.usage.total}</div><div class="stat-label">Total</div></div>
+      <div class="stat"><div class="stat-num" style="color:#10b981">${currentPlan.toUpperCase()}</div><div class="stat-label">Plan</div></div>
+    `;
+    
+    // Keys
+    renderKeys(data.api_keys || []);
+    
+    // Load chart
+    loadChart();
+    
+    // Show upgrade options
+    showUpgradeOptions();
+    
+  } catch(e) { console.error(e); }
+}
+
+function renderKeys(keys) {
+  const el = document.getElementById('keyList');
+  if (!keys.length) {
+    el.innerHTML = '<p style="color:#64748b;font-size:13px">No API keys yet. Create one below.</p>';
+    return;
+  }
+  el.innerHTML = keys.map(k => `
+    <div class="key-row">
+      <span class="name">${k.name || 'unnamed'}</span>
+      <div class="key-meta">
+        <span class="key-plan">${k.plan}</span>
+        <span style="font-size:10px;color:#64748b">${k.enabled ? 'active' : 'disabled'}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function createKey() {
+  try {
+    const resp = await fetch(API+'/me/keys?name=api-key', {method:'POST',headers:{'Authorization':'Bearer '+token}});
+    const data = await resp.json();
+    if (resp.ok) {
+      document.getElementById('newKeyMsg').textContent = '✅ New key: ' + data.key + ' — SAVE THIS, it won\'t be shown again!';
+      // Refresh keys
+      const meResp = await fetch(API+'/me', {headers:{'Authorization':'Bearer '+token}});
+      const meData = await meResp.json();
+      if (meResp.ok) renderKeys(meData.api_keys || []);
+    }
+  } catch(e) {}
+}
+
+async function loadChart() {
+  try {
+    const resp = await fetch(API+'/me/usage/history?days=30', {headers:{'Authorization':'Bearer '+token}});
+    const data = await resp.json();
+    if (!resp.ok) return;
+    
+    const history = data.history || [];
+    if (!history.length) return;
+    
+    const max = Math.max(1, ...history.map(h => h.count));
+    const el = document.getElementById('usageChart');
+    el.innerHTML = history.map(h => {
+      const pct = Math.max(1, (h.count / max) * 100);
+      const d = new Date(h.date * 1000);
+      const label = d.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+      return `<div class="bar-col" title="${label}: ${h.count} requests">
+        <div class="bar" style="height:${pct}%"></div>
+        <div class="bar-label">${h.count||''}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+function showUpgradeOptions() {
+  const plans = ['Free', 'Pro', 'Team', 'Business'];
+  const planLower = currentPlan.toLowerCase();
+  
+  plans.forEach(p => {
+    const lower = p.toLowerCase();
+    const currentEl = document.getElementById('current'+p);
+    const upgradeEl = document.getElementById('upgrade'+p);
+    const cardEl = document.getElementById('plan'+p);
+    
+    if (lower === planLower) {
+      if (currentEl) currentEl.classList.remove('hidden');
+      if (upgradeEl) upgradeEl.classList.add('hidden');
+      if (cardEl) cardEl.classList.add('current');
+    } else if (lower !== 'free' && planOrder(planLower) < planOrder(lower)) {
+      // Higher plan — show upgrade button
+      if (upgradeEl) upgradeEl.classList.remove('hidden');
+      if (currentEl) currentEl.classList.add('hidden');
+      if (cardEl) cardEl.classList.remove('current');
+    } else {
+      if (upgradeEl) upgradeEl.classList.add('hidden');
+      if (currentEl) currentEl.classList.add('hidden');
+      if (cardEl) cardEl.classList.remove('current');
+    }
+  });
+}
+
+function planOrder(p) { return {free:0, pro:1, team:2, business:3}[p] || 0; }
+
+async function doUpgrade(plan) {
+  try {
+    const resp = await fetch(API+'/me/upgrade?plan='+plan, {method:'POST',headers:{'Authorization':'Bearer '+token}});
+    const data = await resp.json();
+    if (resp.ok && data.url) {
+      window.location.href = data.url;
+    } else {
+      toast(data.detail || 'Upgrade unavailable', 'error');
+    }
+  } catch(e) { toast('Upgrade unavailable', 'error'); }
+}
+
+function scrollToUpgrade() {
+  document.getElementById('upgradeSection').scrollIntoView({behavior:'smooth'});
+}
+
+function copyCurl() {
+  const text = 'curl -X POST https://drmadmeow.up.railway.app/v1/screenshot \\\n  -H "Authorization: Bearer YOUR_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"code":"print(42)","language":"python","theme":"dracula"}\'';
+  navigator.clipboard.writeText(text).then(() => toast('Copied!', 'success')).catch(() => {});
+}
+
+function logout() {
+  localStorage.removeItem('codeshot_token');
+  token = null;
+  currentPlan = 'free';
+  document.getElementById('loginForm').classList.remove('hidden');
+  document.getElementById('dashboardView').classList.add('hidden');
+  document.getElementById('navLogout').classList.add('hidden');
+  document.getElementById('navUpgrade').classList.add('hidden');
+  document.getElementById('navPlanBadge').classList.add('hidden');
+  document.getElementById('nameGroup').classList.add('hidden');
+  isRegisterMode = false;
+  document.getElementById('toggleRegBtn').textContent = 'or Register';
+  document.getElementById('regHint').textContent = '';
+}
+
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.className = 'toast toast-' + type;
+  t.textContent = msg;
+  setTimeout(() => t.className = '', 3000);
+}
+</script></body></html>

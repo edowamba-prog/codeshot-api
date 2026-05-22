@@ -114,8 +114,10 @@
     <a href="#features">Features</a>
     <a href="#pricing">Pricing</a>
     <a href="/docs">API Docs</a>
-    <a href="/dashboard" class="btn-sm btn-outline">Sign In</a>
-    <a href="/dashboard" class="btn-sm btn-solid">Get Started</a>
+    <a href="/dashboard" class="btn-sm btn-outline" id="navSignIn">Sign In</a>
+    <a href="/dashboard" class="btn-sm btn-solid" id="navGetStarted">Get Started</a>
+    <span id="navUser" class="hidden" style="color:#94a3b8;font-size:13px;margin-right:8px"></span>
+    <a href="/dashboard" class="btn-sm btn-solid hidden" id="navDashboard">Dashboard</a>
   </div>
 </nav>
 
@@ -227,17 +229,42 @@
 </footer>
 
 <script>
+// Check login state
+(async function() {
+  const token = localStorage.getItem('codeshot_token');
+  if (token) {
+    try {
+      const resp = await fetch('/v1/me', {headers:{'Authorization':'Bearer '+token}});
+      if (resp.ok) {
+        const data = await resp.json();
+        document.getElementById('navSignIn').classList.add('hidden');
+        document.getElementById('navGetStarted').classList.add('hidden');
+        document.getElementById('navUser').classList.remove('hidden');
+        document.getElementById('navDashboard').classList.remove('hidden');
+        document.getElementById('navUser').textContent = data.user.email;
+      } else {
+        localStorage.removeItem('codeshot_token');
+      }
+    } catch(e) {}
+  }
+})();
+
 async function checkout(plan) {
+  const token = localStorage.getItem('codeshot_token');
+  if (!token) {
+    window.location.href = '/dashboard?upgrade=' + plan;
+    return;
+  }
   const btn = event.target;
   btn.textContent = 'Redirecting...';
   btn.disabled = true;
   try {
-    const resp = await fetch('/v1/billing/checkout?plan=' + plan, {method:'POST'});
+    const resp = await fetch('/v1/me/upgrade?plan=' + plan, {method:'POST',headers:{'Authorization':'Bearer '+token}});
     const data = await resp.json();
     if (data.url) window.location.href = data.url;
-    else alert('Checkout unavailable. Please try again.');
+    else { alert('Upgrade unavailable. Login at /dashboard first.'); btn.textContent = 'Subscribe →'; btn.disabled = false; }
   } catch(e) {
-    alert('Checkout unavailable. Please try again.');
+    alert('Upgrade unavailable. Please try again.');
     btn.textContent = 'Subscribe →';
     btn.disabled = false;
   }

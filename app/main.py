@@ -7,6 +7,7 @@ from fastapi.responses import Response, HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 import time
+import os
 
 from .themes import THEMES, SOCIAL_PRESETS, LANGUAGES
 from .renderer import build_html
@@ -22,7 +23,7 @@ from .users import (
     create_user, authenticate, get_user, get_user_by_email, list_users,
     create_token, verify_token, create_user_api_key, get_user_api_keys,
     get_user_usage, get_admin_stats, log_usage, UserCreate, UserLogin,
-    update_user_plan,
+    update_user_plan, get_user_usage_history, ensure_user_api_key,
 )
 from . import admin_api
 
@@ -479,8 +480,22 @@ async def health():
 # ── Billing endpoints ──
 
 @app.post("/v1/billing/checkout")
-async def billing_checkout(plan: str = "pro"):
-    """Create a Stripe Checkout session. Returns URL to redirect user to."""
+async def billing_checkout(plan: str = "pro", request: Request = None):
+    """Create a Stripe Checkout session. Requires authentication."""
+    # Require auth — redirect unauthenticated users to dashboard
+    from fastapi import Request as _Request
+    token = None
+    if request:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+    
+    if not token or not verify_token(token):
+        raise HTTPException(401, "Login required. Visit /dashboard to create an account, then use /v1/me/upgrade.")
+    
+    user_id = verify_token(token)
+    user = get_user(user_id) if user_id else None
+    
     try:
         result = await create_checkout_session(plan)
         return result
@@ -583,144 +598,103 @@ async def user_create_key(request: Request, name: str = "default"):
     return {"key": raw_key, "name": name, "plan": user["plan"]}
 
 
+@app.get("/v1/me/usage/history")
+async def user_usage_history(request: Request, days: int = 30):
+    """Get daily usage history for charts."""
+    token = _get_token(request)
+    if not token:
+        raise HTTPException(401, "Authentication required")
+    user_id = verify_token(token)
+    if not user_id:
+        raise HTTPException(401, "Invalid token")
+    history = get_user_usage_history(user_id, days)
+    return {"days": days, "history": history}
+
+
+@app.post("/v1/me/upgrade")
+async def user_upgrade(request: Request, plan: str = "pro"):
+    """Create a Stripe checkout session for an authenticated user upgrading."""
+    token = _get_token(request)
+    if not token:
+        raise HTTPException(401, "Login required to upgrade. Visit /dashboard first.")
+    user_id = verify_token(token)
+    if not user_id:
+        raise HTTPException(401, "Invalid token")
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    
+    # Pass user email to Stripe for pre-fill
+    from .billing import create_checkout_session, DOMAIN
+    import stripe as _stripe
+    _stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+    PRICE_IDS = {
+        "pro": os.environ.get("STRIPE_PRICE_PRO", "price_1TZfqJHMkYtoDU24yPATdwHt"),
+        "team": os.environ.get("STRIPE_PRICE_TEAM", "price_1TZft1HMkYtoDU24ogtfAbqL"),
+        "business": os.environ.get("STRIPE_PRICE_BUSINESS", "price_1TZfw3HMkYtoDU24U9ngLp6y"),
+    }
+    
+    if not _stripe.api_key:
+        raise HTTPException(400, "Stripe not configured")
+    
+    price_id = PRICE_IDS.get(plan, PRICE_IDS["pro"])
+    session = _stripe.checkout.Session.create(
+        line_items=[{"price": price_id, "quantity": 1}],
+        mode="subscription",
+        success_url=f"{DOMAIN}/v1/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{DOMAIN}/dashboard",
+        metadata={"plan": plan, "user_id": user_id},
+        customer_email=user["email"],
+        allow_promotion_codes=True,
+    )
+    return {"url": session.url, "session_id": session.id}
+
+
+@app.post("/v1/auth/api-key")
+async def auth_api_key(data: UserCreate):
+    """Register or login and get an API key directly. Agent-friendly endpoint."""
+    # Try to find existing user
+    user = get_user_by_email(data.email)
+    if not user:
+        # Register new user
+        try:
+            user = create_user(data.email, data.password, data.name)
+        except ValueError:
+            # Race condition: try login instead
+            user = get_user_by_email(data.email)
+            if not user:
+                raise HTTPException(400, "Registration failed")
+    
+    # Generate API key
+    raw_key = ensure_user_api_key(user["id"])
+    token = create_token(user["id"])
+    
+    return {
+        "api_key": raw_key,
+        "token": token,
+        "plan": user["plan"],
+        "email": user["email"],
+        "message": "Use this key in Authorization: Bearer header. Save it — it won't be shown again.",
+    }
+
+
+# Helper
+def _get_token(request: Request) -> str | None:
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:]
+    return None
+
+
 # ── Dashboard pages ──
 
 @app.get("/dashboard")
 async def user_dashboard():
     """User dashboard HTML page."""
-    return HTMLResponse("""
-<!DOCTYPE html><html><head><title>CodeShot — Dashboard</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:system-ui;background:#0a0a0a;color:#e2e8f0;min-height:100vh}
-.nav{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;background:#111827;border-bottom:1px solid #1e293b}
-.nav h1{font-size:18px;color:#f8fafc}
-.nav a{color:#3b82f6;text-decoration:none;font-size:14px}
-.container{max-width:900px;margin:0 auto;padding:32px 24px}
-.card{background:#111827;border:1px solid #1e293b;border-radius:12px;padding:24px;margin-bottom:20px}
-.card h2{font-size:16px;color:#f8fafc;margin-bottom:16px}
-.stats{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px}
-.stat{flex:1;min-width:120px;background:#0f172a;border-radius:8px;padding:16px;text-align:center}
-.stat-num{font-size:24px;font-weight:800;color:#3b82f6}
-.stat-label{font-size:12px;color:#64748b;margin-top:4px}
-.key-row{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#0f172a;border-radius:8px;margin-bottom:8px;font-family:monospace;font-size:14px}
-.key-row .name{color:#e2e8f0}
-.key-row .plan{color:#10b981;font-size:12px}
-.btn{padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;border:none;cursor:pointer;transition:.2s}
-.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
-.btn-secondary{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
-.form-group{margin-bottom:16px}
-.form-group label{display:block;font-size:13px;color:#94a3b8;margin-bottom:6px}
-.form-group input{width:100%;padding:10px 14px;background:#0f172a;border:1px solid #1e293b;border-radius:8px;color:#e2e8f0;font-size:14px;font-family:monospace}
-.hidden{display:none}
-.error{color:#ef4444;font-size:13px;margin-top:8px}
-.success{color:#10b981;font-size:13px;margin-top:8px}
-</style></head><body>
-<div class="nav">
-  <h1>⚡ CodeShot Dashboard</h1>
-  <div>
-    <span id="userEmail" style="color:#64748b;font-size:13px;margin-right:16px"></span>
-    <a href="/docs">API Docs</a>
-  </div>
-</div>
-<div class="container">
-  <div id="loginForm" class="card">
-    <h2>Login or Register</h2>
-    <div class="form-group"><label>Email</label><input type="email" id="email" placeholder="you@example.com"></div>
-    <div class="form-group"><label>Password</label><input type="password" id="password" placeholder="Min 6 characters"></div>
-    <div style="display:flex;gap:12px">
-      <button class="btn btn-primary" onclick="login()">Login</button>
-      <button class="btn btn-secondary" onclick="register()">Register</button>
-    </div>
-    <div id="authError" class="error"></div>
-  </div>
-  
-  <div id="dashboardView" class="hidden">
-    <div class="stats" id="usageStats"></div>
-    
-    <div class="card">
-      <h2>Your API Keys</h2>
-      <div id="keyList"></div>
-      <button class="btn btn-primary" onclick="createKey()" style="margin-top:12px">+ New API Key</button>
-      <div id="newKey" class="success" style="margin-top:8px"></div>
-    </div>
-    
-    <div class="card">
-      <h2>Quick Test</h2>
-      <div style="font-family:monospace;font-size:13px;color:#64748b;margin-bottom:8px">
-        curl -X POST https://drmadmeow.up.railway.app/v1/screenshot \\
-        <br>  -H "Authorization: Bearer <span style="color:#3b82f6">YOUR_KEY</span>" \\
-        <br>  -H "Content-Type: application/json" \\
-        <br>  -d '{"code":"print(42)","language":"python","theme":"dracula"}'
-      </div>
-    </div>
-  </div>
-</div>
-<script>
-const API = '/v1';
-let token = localStorage.getItem('codeshot_token');
-if (token) checkAuth();
-
-async function login() {
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-  try {
-    const resp = await fetch(API+'/auth/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
-    const data = await resp.json();
-    if (resp.ok) { token = data.token; localStorage.setItem('codeshot_token', token); showDashboard(data.user); }
-    else document.getElementById('authError').textContent = data.detail || 'Login failed';
-  } catch(e) { document.getElementById('authError').textContent = 'Network error'; }
-}
-
-async function register() {
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-  try {
-    const resp = await fetch(API+'/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
-    const data = await resp.json();
-    if (resp.ok) { token = data.token; localStorage.setItem('codeshot_token', token); showDashboard(data.user); }
-    else document.getElementById('authError').textContent = data.detail || 'Registration failed';
-  } catch(e) { document.getElementById('authError').textContent = 'Network error'; }
-}
-
-async function checkAuth() {
-  try {
-    const resp = await fetch(API+'/me', {headers:{'Authorization':'Bearer '+token}});
-    const data = await resp.json();
-    if (resp.ok) showDashboard(data.user, data);
-    else { localStorage.removeItem('codeshot_token'); }
-  } catch(e) {}
-}
-
-function showDashboard(user, data) {
-  document.getElementById('loginForm').classList.add('hidden');
-  document.getElementById('dashboardView').classList.remove('hidden');
-  document.getElementById('userEmail').textContent = user.email;
-  if (data) {
-    document.getElementById('usageStats').innerHTML = `
-      <div class="stat"><div class="stat-num">${data.usage.hourly}</div><div class="stat-label">Requests (hour)</div></div>
-      <div class="stat"><div class="stat-num">${data.usage.daily}</div><div class="stat-label">Requests (day)</div></div>
-      <div class="stat"><div class="stat-num">${data.usage.total}</div><div class="stat-label">Total</div></div>
-      <div class="stat"><div class="stat-num" style="color:#10b981">${user.plan.toUpperCase()}</div><div class="stat-label">Plan</div></div>
-    `;
-    document.getElementById('keyList').innerHTML = data.api_keys.map(k => 
-      `<div class="key-row"><span class="name">${k.name}</span><span class="plan">${k.plan}</span></div>`
-    ).join('') || '<p style="color:#64748b;font-size:14px">No API keys yet. Create one below.</p>';
-  }
-}
-
-async function createKey() {
-  try {
-    const resp = await fetch(API+'/me/keys?name=my-key', {method:'POST',headers:{'Authorization':'Bearer '+token}});
-    const data = await resp.json();
-    if (resp.ok) {
-      document.getElementById('newKey').textContent = '✅ New key: ' + data.key + ' (save this — it won\\'t be shown again)';
-      checkAuth();
-    }
-  } catch(e) {}
-}
-</script></body></html>""")
+    from fastapi.responses import FileResponse
+    import os as _os
+    path = _os.path.join(_os.path.dirname(__file__), "static", "dashboard.html")
+    return FileResponse(path)
 
 
 @app.get("/admin")

@@ -320,3 +320,69 @@ def get_admin_stats() -> dict:
 
 # Initialize on import
 init_db()
+
+
+# ── Usage history (for charts) ──
+
+def get_user_usage_history(user_id: str, days: int = 30) -> list[dict]:
+    """Return daily usage counts for the last N days."""
+    conn = get_db()
+    try:
+        now = time.time()
+        keys = [r["key_hash"] for r in conn.execute(
+            "SELECT key_hash FROM api_keys WHERE user_id = ?", (user_id,)
+        ).fetchall()]
+        
+        if not keys:
+            return []
+        
+        placeholders = ",".join("?" * len(keys))
+        cutoff = now - (days * 86400)
+        
+        rows = conn.execute(
+            f"SELECT timestamp FROM usage_log WHERE key_hash IN ({placeholders}) AND timestamp > ? ORDER BY timestamp",
+            (*keys, cutoff)
+        ).fetchall()
+        
+        # Bucket into days
+        from collections import defaultdict
+        buckets = defaultdict(int)
+        for r in rows:
+            day = int((r["timestamp"] // 86400) * 86400)  # midnight UTC
+            buckets[day] += 1
+        
+        # Fill all days
+        result = []
+        for i in range(days - 1, -1, -1):
+            day_start = int((now // 86400) * 86400) - (i * 86400)
+            result.append({
+                "date": day_start,
+                "count": buckets.get(day_start, 0),
+            })
+        return result
+    finally:
+        conn.close()
+
+
+def ensure_user_api_key(user_id: str, name: str = "default") -> str:
+    """Get or create an API key for a user. Returns the raw key."""
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT key_hash FROM api_keys WHERE user_id = ? LIMIT 1",
+            (user_id,)
+        ).fetchone()
+        if row:
+            # Key exists but we can't recover the raw key. Create a new one.
+            pass
+        
+        raw_key = f"cs_{uuid.uuid4().hex[:24]}"
+        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        conn.execute(
+            "INSERT INTO api_keys (id, user_id, name, key_hash, plan, created_at) VALUES (?,?,?,?,?,?)",
+            (str(uuid.uuid4()), user_id, name, key_hash, "free", time.time())
+        )
+        conn.commit()
+        return raw_key
+    finally:
+        conn.close()
