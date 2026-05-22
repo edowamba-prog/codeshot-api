@@ -28,8 +28,9 @@ from .users import (
 )
 from . import admin_api
 from .x402 import (
-    is_x402_path, agent_path_to_real, build_payment_info,
-    get_price_for_path, verify_payment_proof, EVM_PAYEE_ADDRESS,
+    is_x402_path, agent_path_to_real, build_payment_required,
+    get_price_usdc, verify_payment_signature, EVM_PAYEE_ADDRESS,
+    build_openapi_payment_info,
 )
 
 app = FastAPI(
@@ -61,7 +62,7 @@ def custom_openapi():
                     "description": "Render code as a beautiful PNG screenshot. Pay-per-use via x402.",
                     "operationId": "createScreenshot",
                     "security": [],
-                    "x-payment-info": build_payment_info("/v1/agent/screenshot")["x-payment-info"],
+                    "x-payment-info": build_openapi_payment_info("/v1/agent/screenshot")["x-payment-info"],
                     "requestBody": {
                         "required": True,
                         "content": {
@@ -94,7 +95,7 @@ def custom_openapi():
                     "description": "Render code diff as PNG. Pay-per-use via x402.",
                     "operationId": "createDiff",
                     "security": [],
-                    "x-payment-info": build_payment_info("/v1/agent/diff")["x-payment-info"],
+                    "x-payment-info": build_openapi_payment_info("/v1/agent/diff")["x-payment-info"],
                     "responses": {"200": {"description": "PNG"}, "402": {"description": "Payment required"}},
                 }
             },
@@ -104,7 +105,7 @@ def custom_openapi():
                     "description": "Render animated code as MP4/GIF. Pay-per-use via x402.",
                     "operationId": "createAnimation",
                     "security": [],
-                    "x-payment-info": build_payment_info("/v1/agent/animate")["x-payment-info"],
+                    "x-payment-info": build_openapi_payment_info("/v1/agent/animate")["x-payment-info"],
                     "responses": {"200": {"description": "MP4/GIF"}, "402": {"description": "Payment required"}},
                 }
             },
@@ -114,7 +115,7 @@ def custom_openapi():
                     "description": "AI analyzes and annotates code. Pay-per-use via x402.",
                     "operationId": "createAnnotation",
                     "security": [],
-                    "x-payment-info": build_payment_info("/v1/agent/annotate")["x-payment-info"],
+                    "x-payment-info": build_openapi_payment_info("/v1/agent/annotate")["x-payment-info"],
                     "responses": {"200": {"description": "PNG"}, "402": {"description": "Payment required"}},
                 }
             },
@@ -134,24 +135,21 @@ class X402Middleware(_BaseMW):
         path = request.url.path
         
         if is_x402_path(path):
-            proof = request.headers.get("X-Payment-Proof", "")
-            price = get_price_for_path(path)
+            proof = request.headers.get("PAYMENT-SIGNATURE", "")
+            price_usdc = get_price_usdc(path)
             
             if not proof:
-                # Return 402 Payment Required
-                info = build_payment_info(path)
+                import base64 as _b64
+                info = build_payment_required(path)
+                info_b64 = _b64.b64encode(json.dumps(info).encode()).decode()
                 return JSONResponse(
-                    {
-                        "detail": "Payment required",
-                        "type": "https://docs.x402.org/payment-required",
-                        **info,
-                    },
+                    info,
                     status_code=402,
-                    headers={"X-Payment-Info": json.dumps(info)},
+                    headers={"PAYMENT-REQUIRED": info_b64},
                 )
             
-            # Verify payment proof
-            valid, result = verify_payment_proof(proof, price, EVM_PAYEE_ADDRESS)
+            # Verify payment signature
+            valid, result = verify_payment_signature(proof, EVM_PAYEE_ADDRESS, price_usdc)
             if not valid:
                 return JSONResponse(
                     {"detail": f"Payment verification failed: {result}"},

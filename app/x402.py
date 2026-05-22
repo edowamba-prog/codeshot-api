@@ -1,154 +1,151 @@
 """
-x402 Payment Middleware for CodeShot API.
-Implements the x402 protocol for agent-native payments.
+x402 Payment Protocol for CodeShot API.
+Implements the x402 open standard for internet-native payments.
+https://github.com/x402-foundation/x402
 
 Flow:
-  1. Agent requests a paid endpoint without payment proof
-  2. Server returns 402 with X-Payment-Info header
-  3. Agent pays via x402 facilitator, gets payment proof
-  4. Agent retries with X-Payment-Proof header
-  5. Server verifies → serves the request
-
-References:
-  https://docs.x402.org
-  https://agentcash.dev/docs
+  1. Client requests /v1/agent/* without payment
+  2. Server returns 402 with PAYMENT-REQUIRED header (base64 JSON)
+  3. Client pays via facilitator, gets PAYMENT-SIGNATURE
+  4. Client retries with PAYMENT-SIGNATURE header
+  5. Server verifies → serves request
 """
 
 import os
 import json
 import time
-import hmac
-import hashlib
+import base64
 from typing import Optional
 
 # ── Configuration ──
 
-# EVM payee address — where payments go
 EVM_PAYEE_ADDRESS = os.environ.get("EVM_PAYEE_ADDRESS", "")
 
-# Pricing per endpoint (in USD, expressed as dollars)
 AGENT_PRICES = {
-    "/v1/screenshot": 0.01,   # $0.01 per screenshot
-    "/v1/diff": 0.01,          # $0.01 per diff
-    "/v1/animate": 0.05,       # $0.05 per animation
-    "/v1/annotate": 0.03,      # $0.03 per annotation (includes AI cost)
+    "/v1/screenshot": 0.01,
+    "/v1/diff": 0.01,
+    "/v1/animate": 0.05,
+    "/v1/annotate": 0.03,
 }
 
-# Networks we accept payment on
-SUPPORTED_NETWORKS = [
-    {
-        "network": "evm",
-        "chainId": 8453,        # Base
-        "token": "USDC",
-        "tokenAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "decimals": 6,
-    },
-]
-
-# Minimum payment confirmation blocks
+# Base network (USDC on Base)
+BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+CHAIN_ID = 8453
 MIN_CONFIRMATIONS = 1
-
-# Payment proof max age (seconds) — prevent replay attacks
-MAX_PROOF_AGE = 300  # 5 minutes
+MAX_PROOF_AGE = 300
 
 
-def build_payment_info(path: str) -> dict:
-    """Build x402 payment info for a given endpoint path."""
-    price_usd = AGENT_PRICES.get(path, 0.01)
+def build_payment_required(path: str) -> dict:
+    """Build the x402 PaymentRequired response object."""
+    price = AGENT_PRICES.get(path, 0.01)
     
     return {
+        "x402Version": 1,
+        "network": "evm",
+        "chainId": CHAIN_ID,
+        "scheme": "exact",
+        "networkPayload": {
+            "payTo": EVM_PAYEE_ADDRESS,
+            "amount": str(int(price * 1_000_000)),  # USDC has 6 decimals
+            "token": BASE_USDC,
+            "decimals": 6,
+        },
+        "description": f"CodeShot API — {path.split('/')[-1]}",
+        "metadata": {
+            "amountUsd": str(price),
+            "currency": "USD",
+        },
+    }
+
+
+def build_openapi_payment_info(path: str) -> dict:
+    """Build x402 payment metadata for OpenAPI spec."""
+    price = AGENT_PRICES.get(path, 0.01)
+    return {
         "x-payment-info": {
-            "version": "1.0",
             "protocols": {
                 "x402": {
-                    "networks": SUPPORTED_NETWORKS,
+                    "networks": [{
+                        "network": "evm",
+                        "chainId": CHAIN_ID,
+                        "token": "USDC",
+                        "tokenAddress": BASE_USDC,
+                        "decimals": 6,
+                    }],
                     "payTo": EVM_PAYEE_ADDRESS,
                     "pricing": {
-                        "amount": str(price_usd),
+                        "amount": str(price),
                         "currency": "USD",
                         "mode": "exact",
                     },
-                    "minConfirmations": MIN_CONFIRMATIONS,
-                    "maxProofAge": MAX_PROOF_AGE,
                 }
             }
         }
     }
 
 
-def verify_payment_proof(proof_header: str, expected_amount_usd: str, payee: str) -> tuple[bool, str]:
-    """Verify an x402 payment proof.
+def verify_payment_signature(sig_header: str, payee: str, amount_usdc: str) -> tuple[bool, str]:
+    """Verify an x402 PAYMENT-SIGNATURE.
     
-    The proof is a signed message (EIP-191) containing:
-    {amount}:{payee}:{timestamp}:{nonce}
-    
-    Returns (is_valid, error_message).
+    Returns (is_valid, wallet_address_or_error).
     """
-    if not proof_header:
-        return False, "Missing payment proof"
+    if not sig_header:
+        return False, "Missing PAYMENT-SIGNATURE header"
     
     try:
-        proof = json.loads(proof_header)
+        payload = json.loads(sig_header)
     except json.JSONDecodeError:
-        return False, "Invalid proof format"
+        # Try base64 decode first (some clients b64-encode)
+        try:
+            payload = json.loads(base64.b64decode(sig_header).decode())
+        except Exception:
+            return False, "Invalid PAYMENT-SIGNATURE format"
     
-    signature = proof.get("signature", "")
-    message = proof.get("message", {})
+    signature = payload.get("signature", "")
+    message = payload.get("message", {})
     
     if not signature or not message:
-        return False, "Incomplete proof"
+        return False, "Incomplete signature payload"
     
-    # Check timestamp freshness
-    msg_timestamp = message.get("timestamp", 0)
-    if abs(time.time() - msg_timestamp) > MAX_PROOF_AGE:
-        return False, f"Proof expired (max {MAX_PROOF_AGE}s age)"
+    # Check freshness
+    msg_ts = message.get("timestamp", 0)
+    if abs(time.time() - msg_ts) > MAX_PROOF_AGE:
+        return False, f"Signature expired (max {MAX_PROOF_AGE}s)"
     
     # Check amount
-    msg_amount = message.get("amount", "0")
-    if msg_amount != expected_amount_usd:
-        return False, f"Amount mismatch: {msg_amount} vs {expected_amount_usd}"
+    msg_amount = str(message.get("amount", "0"))
+    if msg_amount != amount_usdc:
+        return False, f"Amount mismatch: {msg_amount} vs {amount_usdc}"
     
     # Check payee
     msg_payee = message.get("payee", "")
     if msg_payee.lower() != payee.lower():
-        return False, "Payee address mismatch"
+        return False, "Payee mismatch"
     
-    # Verify signature (EIP-191)
+    # Verify EIP-191 signature
     try:
         from eth_account.messages import encode_defunct
         from eth_account import Account
         
-        # Reconstruct the signed message
-        msg_text = f"{msg_amount}:{msg_payee}:{msg_timestamp}:{message.get('nonce', '')}"
+        msg_text = f"{msg_amount}:{msg_payee}:{msg_ts}:{message.get('nonce', '')}"
         signable = encode_defunct(text=msg_text)
         recovered = Account.recover_message(signable, signature=signature)
-        
-        # The signer is the payer — we accept any valid signature
-        # (In production, you might want to check payer whitelist)
         return True, recovered
-    
     except ImportError:
-        # Fallback: accept proof if eth-account not installed (dev mode)
-        return True, "verified (dev mode)"
+        return True, "verified (dev-mode, no eth-account)"
     except Exception as e:
-        return False, f"Signature verification failed: {str(e)}"
+        return False, f"Signature verification failed: {e}"
 
 
 def is_x402_path(path: str) -> bool:
-    """Check if this path is a paid agent endpoint."""
-    # Agent endpoints are under /v1/agent/
     return path.startswith("/v1/agent/")
 
 
 def agent_path_to_real(path: str) -> str:
-    """Convert agent path to real API path.
-    /v1/agent/screenshot → /v1/screenshot
-    """
     return path.replace("/v1/agent/", "/v1/")
 
 
-def get_price_for_path(path: str) -> str:
-    """Get the USD price for an endpoint path."""
-    real_path = agent_path_to_real(path) if is_x402_path(path) else path
-    price = AGENT_PRICES.get(real_path, 0.01)
-    return str(price)
+def get_price_usdc(path: str) -> str:
+    real = agent_path_to_real(path) if is_x402_path(path) else path
+    price_usd = AGENT_PRICES.get(real, 0.01)
+    return str(int(price_usd * 1_000_000))
