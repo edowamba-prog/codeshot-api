@@ -34,6 +34,61 @@ def build_payment_required(path: str) -> PaymentRequiredV1:
     price = AGENT_PRICES.get(path, "0.01")
     resource = f"{DOMAIN}{path}"
     
+    # Input schema for each endpoint (derived from OpenAPI)
+    endpoint = path.split("/")[-1]
+    schemas = {
+        "screenshot": {
+            "type": "object",
+            "required": ["code"],
+            "properties": {
+                "code": {"type": "string", "description": "Source code to render"},
+                "language": {"type": "string", "default": "plaintext"},
+                "theme": {"type": "string", "default": "dracula"},
+                "preset": {"type": "string"},
+                "watermark": {"type": "string"},
+                "format": {"type": "string", "enum": ["png", "html"], "default": "png"},
+            },
+            "example": {"code": "print('hello')", "language": "python", "theme": "dracula"},
+        },
+        "diff": {
+            "type": "object",
+            "required": ["old_code", "new_code"],
+            "properties": {
+                "old_code": {"type": "string"},
+                "new_code": {"type": "string"},
+                "language": {"type": "string", "default": "plaintext"},
+                "theme": {"type": "string", "default": "dracula"},
+                "mode": {"type": "string", "enum": ["unified", "side-by-side"], "default": "unified"},
+            },
+            "example": {"old_code": "x=1", "new_code": "x=2", "language": "python"},
+        },
+        "animate": {
+            "type": "object",
+            "required": ["code"],
+            "properties": {
+                "code": {"type": "string"},
+                "language": {"type": "string", "default": "plaintext"},
+                "theme": {"type": "string", "default": "dracula"},
+                "effect": {"type": "string", "enum": ["typewriter", "reveal-line", "fade-in"], "default": "typewriter"},
+                "duration": {"type": "number", "default": 4.0},
+                "format": {"type": "string", "enum": ["mp4", "gif"], "default": "mp4"},
+            },
+            "example": {"code": "print('hello')", "effect": "typewriter"},
+        },
+        "annotate": {
+            "type": "object",
+            "required": ["code"],
+            "properties": {
+                "code": {"type": "string"},
+                "language": {"type": "string", "default": "plaintext"},
+                "theme": {"type": "string", "default": "dracula"},
+                "focus": {"type": "string", "enum": ["general", "error-handling", "performance", "security", "patterns"], "default": "general"},
+            },
+            "example": {"code": "def foo(): pass", "focus": "general"},
+        },
+    }
+    schema = schemas.get(endpoint, schemas["screenshot"])
+    
     return PaymentRequiredV1(
         accepts=[{
             "scheme": "exact",
@@ -43,10 +98,17 @@ def build_payment_required(path: str) -> PaymentRequiredV1:
             "resource": resource,
             "maxAmountRequired": price,
             "maxTimeoutSeconds": MAX_PROOF_AGE,
-            "description": f"CodeShot — {path.split('/')[-1]}",
+            "description": f"CodeShot — {endpoint}",
             "networkPayload": {
                 "token": BASE_USDC,
                 "chainId": CHAIN_ID,
+            },
+            "extra": {
+                "bazaar": {
+                    "info": {
+                        "inputSchema": schema,
+                    }
+                }
             },
         }]
     )
