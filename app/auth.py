@@ -146,7 +146,18 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-PUBLIC_PATHS = {"/", "/health", "/docs", "/redoc", "/openapi.json", "/v1/preview", "/v1/themes", "/v1/presets", "/v1/languages", "/v1/effects", "/v1/admin/keys", "/v1/admin/keys"}
+PUBLIC_PATHS = {"/", "/health", "/docs", "/redoc", "/openapi.json", "/v1/preview", "/v1/themes", "/v1/presets", "/v1/languages", "/v1/effects"}
+
+# Paths that bypass API key middleware entirely (use their own auth or are public pages)
+NO_API_KEY_PREFIXES = [
+    "/static",
+    "/v1/admin",
+    "/v1/billing",
+    "/v1/auth",
+    "/v1/me",
+    "/dashboard",
+    "/admin",
+]
 
 key_store = APIKeyStore()
 rate_limiter = RateLimiter()
@@ -158,8 +169,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         
-        # Skip auth for public paths and static files
-        if path in PUBLIC_PATHS or path.startswith("/static") or path.startswith("/v1/admin") or path.startswith("/v1/billing"):
+        # Skip API key auth for public pages and auth endpoints
+        if path in PUBLIC_PATHS or any(path.startswith(p) for p in NO_API_KEY_PREFIXES):
             return await call_next(request)
         
         # Check API key
