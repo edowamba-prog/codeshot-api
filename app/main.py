@@ -29,7 +29,7 @@ from .users import (
 from . import admin_api
 from .x402 import (
     is_x402_path, agent_path_to_real, build_payment_required,
-    get_price_usdc, verify_payment_signature, EVM_PAYEE_ADDRESS,
+    get_price, verify_payment_signature, EVM_PAYEE_ADDRESS,
     build_openapi_payment_info,
 )
 
@@ -136,20 +136,21 @@ class X402Middleware(_BaseMW):
         
         if is_x402_path(path):
             proof = request.headers.get("PAYMENT-SIGNATURE", "")
-            price_usdc = get_price_usdc(path)
+            price = get_price(path)
             
             if not proof:
                 import base64 as _b64
-                info = build_payment_required(path)
-                info_b64 = _b64.b64encode(json.dumps(info).encode()).decode()
+                pr = build_payment_required(path)
+                body = pr.model_dump()
+                body_b64 = _b64.b64encode(json.dumps(body).encode()).decode()
                 return JSONResponse(
-                    info,
+                    body,
                     status_code=402,
-                    headers={"PAYMENT-REQUIRED": info_b64},
+                    headers={"PAYMENT-REQUIRED": body_b64},
                 )
             
             # Verify payment signature
-            valid, result = verify_payment_signature(proof, EVM_PAYEE_ADDRESS, price_usdc)
+            valid, result = verify_payment_signature(proof, EVM_PAYEE_ADDRESS, get_price(path))
             if not valid:
                 return JSONResponse(
                     {"detail": f"Payment verification failed: {result}"},
