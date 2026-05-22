@@ -84,7 +84,7 @@ def build_payment_required(path: str) -> dict:
         "x402Version": 2,
         "accepts": [{
             "scheme": "exact",
-            "network": "base",       # network alias
+            "network": f"eip155:{CHAIN_ID}",
             "amount": price,
             "payTo": EVM_PAYEE_ADDRESS,
             "maxTimeoutSeconds": MAX_PROOF_AGE,
@@ -107,6 +107,7 @@ def build_payment_required(path: str) -> dict:
                     },
                     "output": {
                         "type": "image/png",
+                        "description": "Rendered code screenshot",
                     },
                 },
             },

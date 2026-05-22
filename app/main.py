@@ -84,7 +84,7 @@ def custom_openapi():
                         },
                     },
                     "responses": {
-                        "200": {"description": "PNG screenshot"},
+                        "200": {"description": "Rendered code screenshot as PNG image", "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}},
                         "402": {"description": "Payment required — send X-Payment-Proof header with signed proof"},
                     },
                 }
@@ -115,7 +115,7 @@ def custom_openapi():
                             }
                         },
                     },
-                    "responses": {"200": {"description": "PNG"}, "402": {"description": "Payment required"}},
+                    "responses": {"200": {"description": "Rendered code diff as PNG image", "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}}, "402": {"description": "Payment required"}},
                 }
             },
             "/v1/agent/animate": {
@@ -145,7 +145,7 @@ def custom_openapi():
                             }
                         },
                     },
-                    "responses": {"200": {"description": "MP4/GIF"}, "402": {"description": "Payment required"}},
+                    "responses": {"200": {"description": "Animated code as MP4 video or GIF", "content": {"video/mp4": {"schema": {"type": "string", "format": "binary"}}}}, "402": {"description": "Payment required"}},
                 }
             },
             "/v1/agent/annotate": {
@@ -173,7 +173,7 @@ def custom_openapi():
                             }
                         },
                     },
-                    "responses": {"200": {"description": "PNG"}, "402": {"description": "Payment required"}},
+                    "responses": {"200": {"description": "Rendered code diff as PNG image", "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}}, "402": {"description": "Payment required"}},
                 }
             },
         },
