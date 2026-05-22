@@ -45,8 +45,12 @@ class APIKeyStore:
     async def create(self, name: str, plan: str = "free") -> str:
         """Create a new API key. Returns the plaintext key (shown once)."""
         raw_key = f"cs_{uuid.uuid4().hex[:24]}"
+        await self._register_raw(raw_key, name, plan)
+        return raw_key
+    
+    async def _register_raw(self, raw_key: str, name: str, plan: str = "free"):
+        """Register a raw key in the store (used by ensure_user_api_key)."""
         key_hash = self._hash(raw_key)
-        
         async with self._lock:
             self._keys[key_hash] = {
                 "name": name,
@@ -55,8 +59,6 @@ class APIKeyStore:
                 "enabled": True,
             }
             self._save()
-        
-        return raw_key
     
     async def validate(self, key: str) -> Optional[dict]:
         """Validate an API key. Returns key info dict or None."""

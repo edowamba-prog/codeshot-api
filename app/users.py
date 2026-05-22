@@ -365,24 +365,34 @@ def get_user_usage_history(user_id: str, days: int = 30) -> list[dict]:
 
 
 def ensure_user_api_key(user_id: str, name: str = "default") -> str:
-    """Get or create an API key for a user. Returns the raw key."""
+    """Get or create an API key for a user. Returns the raw key.
+    Registers in both SQLite (usage tracking) and legacy JSON store (auth middleware)."""
     conn = get_db()
     try:
-        row = conn.execute(
-            "SELECT key_hash FROM api_keys WHERE user_id = ? LIMIT 1",
-            (user_id,)
-        ).fetchone()
-        if row:
-            # Key exists but we can't recover the raw key. Create a new one.
-            pass
-        
         raw_key = f"cs_{uuid.uuid4().hex[:24]}"
         key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        
+        # Get user's plan
+        user = conn.execute("SELECT plan FROM users WHERE id = ?", (user_id,)).fetchone()
+        plan = user["plan"] if user else "free"
+        
         conn.execute(
             "INSERT INTO api_keys (id, user_id, name, key_hash, plan, created_at) VALUES (?,?,?,?,?,?)",
-            (str(uuid.uuid4()), user_id, name, key_hash, "free", time.time())
+            (str(uuid.uuid4()), user_id, name, key_hash, plan, time.time())
         )
         conn.commit()
+        
+        # Also register in legacy JSON key store so auth middleware validates it
+        from .auth import key_store
+        import asyncio
+        async def _register():
+            await key_store._register_raw(raw_key, name, plan)
+        try:
+            asyncio.get_event_loop()
+            asyncio.create_task(_register())
+        except RuntimeError:
+            pass  # No event loop (tests), skip JSON registration
+        
         return raw_key
     finally:
         conn.close()
