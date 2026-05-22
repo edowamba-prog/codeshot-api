@@ -697,196 +697,58 @@ async def user_dashboard():
     return FileResponse(path)
 
 
+
 @app.get("/admin")
 async def admin_dashboard():
-    """Admin dashboard — full user & key management."""
-    return HTMLResponse("""
-<!DOCTYPE html><html><head><title>CodeShot Admin</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:system-ui;background:#0a0a0a;color:#e2e8f0}
-.nav{display:flex;justify-content:space-between;align-items:center;padding:14px 24px;background:#111827;border-bottom:1px solid #1e293b}
-.nav h1{font-size:17px;color:#f8fafc}.nav a{color:#3b82f6;text-decoration:none;font-size:13px}
-.container{max-width:1100px;margin:0 auto;padding:24px}
-.stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
-.stat{flex:1;min-width:140px;background:#111827;border:1px solid #1e293b;border-radius:10px;padding:18px;text-align:center}
-.stat-num{font-size:26px;font-weight:800;color:#3b82f6}.stat-label{font-size:11px;color:#64748b;margin-top:4px;text-transform:uppercase;letter-spacing:0.5px}
-.panel{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:20px;margin-bottom:16px}
-.panel h2{font-size:15px;color:#f8fafc;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #1e293b}
-th{color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600}
-.actions{display:flex;gap:6px}
-.btn{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:.15s;color:#fff}
-.btn-sm{padding:4px 10px;font-size:11px}
-.btn-green{background:#065f46}.btn-green:hover{background:#047857}
-.btn-red{background:#7f1d1d}.btn-red:hover{background:#991b1b}
-.btn-blue{background:#1e40af}.btn-blue:hover{background:#1d4ed8}
-.btn-gray{background:#374151}.btn-gray:hover{background:#4b5563}
-.plan-free{color:#64748b}.plan-pro{color:#10b981}.plan-team{color:#f59e0b}.plan-business{color:#8b5cf6}
-.badge{padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600}
-.badge-active{background:#065f46;color:#10b981}.badge-disabled{background:#7f1d1d;color:#fca5a5}
-.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;z-index:999}
-.modal.show{display:flex}
-.modal-content{background:#111827;border:1px solid #1e293b;border-radius:12px;padding:28px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto}
-.modal h3{font-size:16px;color:#f8fafc;margin-bottom:16px}
-.select-plan{display:flex;gap:8px;margin:12px 0}
-.plan-option{padding:8px 16px;border-radius:8px;border:2px solid #1e293b;background:transparent;color:#e2e8f0;cursor:pointer;font-size:13px;font-weight:600;transition:.2s}
-.plan-option:hover{border-color:#3b82f6}.plan-option.selected{border-color:#3b82f6;background:#1e3a5f}
-.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;animation:slideUp .3s ease-out}
-.toast-success{background:#065f46;color:#10b981}.toast-error{background:#7f1d1d;color:#fca5a5}
-@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-</style></head><body>
-<div class="nav"><h1>⚡ CodeShot Admin</h1><div style="display:flex;gap:12px"><a href="/dashboard">User Dashboard</a><a href="/docs">API Docs</a></div></div>
-<div class="container">
-  <div class="stats" id="statsContainer"></div>
-  
-  <div class="panel"><h2>Users <span style="color:#64748b;font-weight:400;font-size:12px" id="userCount"></span></h2>
-    <table><thead><tr><th>Email</th><th>Name</th><th>Plan</th><th>Joined</th><th style="width:200px">Actions</th></tr></thead>
-    <tbody id="userTable"></tbody></table>
-  </div>
-  
-  <div class="panel"><h2>API Keys <span style="color:#64748b;font-weight:400;font-size:12px" id="keyCount"></span></h2>
-    <table><thead><tr><th>Name</th><th>Owner</th><th>Plan</th><th>Status</th><th style="width:180px">Actions</th></tr></thead>
-    <tbody id="keyTable"></tbody></table>
-  </div>
-</div>
-
-<div class="modal" id="userModal"><div class="modal-content"><h3 id="modalTitle">User Details</h3><div id="modalBody"></div><button class="btn btn-gray" style="margin-top:16px" onclick="closeModal()">Close</button></div></div>
-<div id="toast"></div>
-
-<script>
-const API = '/v1/admin';
-let users = [], keys = [];
-
-async function load() {
-  try {
-    // Stats
-    const s = await (await fetch('/v1/admin/keys')).json();
-    document.getElementById('statsContainer').innerHTML = `
-      <div class="stat"><div class="stat-num" id="totalUsers">-</div><div class="stat-label">Users</div></div>
-      <div class="stat"><div class="stat-num" id="totalKeys">-</div><div class="stat-label">API Keys</div></div>
-      <div class="stat"><div class="stat-num">${s.keys.length}</div><div class="stat-label">Legacy Keys</div></div>
-    `;
-    
-    // Users
-    const u = await Promise.all((await fetch(API + '/all-keys')).json().keys.map(async k => {
-      try { const d = await fetch(API + '/users/' + k.user_id); const j = await d.json(); return j.user || {}; } catch(e) { return {}; }
-    }));
-    
-    // Build unique user list
-    const userMap = new Map();
-    for (const k of (await fetch(API + '/all-keys')).json().keys) {
-      if (!userMap.has(k.user_id)) {
-        try {
-          const d = await fetch(API + '/users/' + k.user_id);
-          const j = await d.json();
-          userMap.set(k.user_id, j.user || {email: k.user_email, id: k.user_id, plan: 'free'});
-        } catch(e) {
-          userMap.set(k.user_id, {email: k.user_email, id: k.user_id, plan: 'free'});
-        }
-      }
-    }
-    users = Array.from(userMap.values());
-    keys = (await fetch(API + '/all-keys')).json().keys;
-    
-    document.getElementById('totalUsers').textContent = users.length;
-    document.getElementById('totalKeys').textContent = keys.length;
-    document.getElementById('userCount').textContent = users.length + ' users';
-    document.getElementById('keyCount').textContent = keys.length + ' keys';
-    
-    // Render users
-    document.getElementById('userTable').innerHTML = users.map(u => `
-      <tr>
-        <td>${u.email||'—'}</td>
-        <td>${u.name||'—'}</td>
-        <td><span class="plan-${u.plan||'free'}">${(u.plan||'free').toUpperCase()}</span></td>
-        <td style="color:#64748b;font-size:11px">${u.created_at?new Date(u.created_at*1000).toLocaleDateString():'—'}</td>
-        <td><div class="actions">
-          <button class="btn btn-sm btn-blue" onclick="changePlan('${u.id}','${u.plan||'free'}')">Plan</button>
-          <button class="btn btn-sm btn-green" onclick="viewUser('${u.id}')">View</button>
-          <button class="btn btn-sm btn-red" onclick="deleteUser('${u.id}')">Delete</button>
-        </div></td>
-      </tr>`).join('');
-    
-    // Render keys
-    document.getElementById('keyTable').innerHTML = keys.map(k => `
-      <tr>
-        <td style="font-family:monospace">${k.name}</td>
-        <td>${k.user_email||'—'}</td>
-        <td><span class="plan-${k.plan}">${k.plan.toUpperCase()}</span></td>
-        <td><span class="badge ${k.enabled?'badge-active':'badge-disabled'}">${k.enabled?'Active':'Disabled'}</span></td>
-        <td><div class="actions">
-          <button class="btn btn-sm ${k.enabled?'btn-gray':'btn-green'}" onclick="toggleKey('${k.id}',${!k.enabled})">${k.enabled?'Disable':'Enable'}</button>
-          <button class="btn btn-sm btn-red" onclick="revokeKey('${k.id}')">Revoke</button>
-        </div></td>
-      </tr>`).join('');
-  } catch(e) { toast('Failed to load data', 'error'); }
-}
-
-async function changePlan(userId, currentPlan) {
-  const plans = ['free','pro','team','business'];
-  document.getElementById('modalTitle').textContent = 'Change Plan';
-  document.getElementById('modalBody').innerHTML = `
-    <p style="color:#94a3b8;font-size:13px;margin-bottom:12px">Current: <b class="plan-${currentPlan}">${currentPlan.toUpperCase()}</b></p>
-    <div class="select-plan">${plans.map(p => `<button class="plan-option${p===currentPlan?' selected':''}" onclick="setPlan('${userId}','${p}')">${p.toUpperCase()}</button>`).join('')}</div>
-  `;
-  document.getElementById('userModal').classList.add('show');
-}
-
-async function setPlan(userId, plan) {
-  await fetch(API + '/users/' + userId + '/plan?plan=' + plan, {method:'POST'});
-  closeModal();
-  toast('Plan changed to ' + plan.toUpperCase(), 'success');
-  load();
-}
-
-async function deleteUser(userId) {
-  if (!confirm('Delete this user and ALL their API keys? This cannot be undone.')) return;
-  await fetch(API + '/users/' + userId, {method:'DELETE'});
-  toast('User deleted', 'error');
-  load();
-}
-
-async function viewUser(userId) {
-  const d = await (await fetch(API + '/users/' + userId)).json();
-  document.getElementById('modalTitle').textContent = d.user?.email || 'User';
-  document.getElementById('modalBody').innerHTML = `
-    <p style="color:#94a3b8;font-size:13px">Plan: <b class="plan-${d.user?.plan||'free'}">${(d.user?.plan||'free').toUpperCase()}</b> · Keys: ${d.keys?.length||0}</p>
-    ${(d.keys||[]).map(k => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #1e293b;font-family:monospace;font-size:12px"><span>${k.name} <span class="plan-${k.plan}">${k.plan}</span></span><span class="badge ${k.enabled?'badge-active':'badge-disabled'}">${k.enabled?'Active':'Disabled'}</span></div>`).join('')||'<p style="color:#64748b">No API keys</p>'}
-  `;
-  document.getElementById('userModal').classList.add('show');
-}
-
-async function toggleKey(keyId, enable) {
-  await fetch(API + '/keys/' + keyId + '/toggle?enabled=' + enable, {method:'POST'});
-  toast('Key ' + (enable?'enabled':'disabled'), 'success');
-  load();
-}
-
-async function revokeKey(keyId) {
-  if (!confirm('Permanently revoke this API key? It will stop working immediately.')) return;
-  await fetch(API + '/keys/' + keyId, {method:'DELETE'});
-  toast('Key revoked', 'error');
-  load();
-}
-
-function closeModal() { document.getElementById('userModal').classList.remove('show'); }
-function toast(msg, type) {
-  const t = document.getElementById('toast');
-  t.className = 'toast toast-' + type;
-  t.textContent = msg;
-  setTimeout(() => t.className = '', 3000);
-}
-load();
-</script></body></html>""")
+    """Admin dashboard. Password-protected."""
+    from fastapi.responses import FileResponse
+    import os as _os
+    p = _os.path.join(_os.path.dirname(__file__), "static", "admin.html")
+    return FileResponse(p)
 
 
-# ── Admin endpoints ──
+# ── Admin auth dependency ──
+
+from fastapi import Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+admin_auth_scheme = HTTPBearer(auto_error=False)
+
+def require_admin(credentials: HTTPAuthorizationCredentials = Depends(admin_auth_scheme)):
+    """Dependency that validates admin JWT."""
+    if not credentials:
+        raise HTTPException(401, "Admin authentication required")
+    if not admin_api.admin_verify(credentials.credentials):
+        raise HTTPException(403, "Invalid admin credentials")
+    return True
+
+
+@app.post("/v1/admin/login")
+async def admin_login(request: Request):
+    """Login as admin. Send {"password": "..."} in body. Returns JWT valid 24h."""
+    try:
+        body = await request.json()
+        password = body.get("password", "")
+    except Exception:
+        password = ""
+    token = admin_api.admin_login(password)
+    if not token:
+        if not admin_api.ADMIN_PASSWORD:
+            raise HTTPException(400, "ADMIN_PASSWORD not configured on server")
+        raise HTTPException(401, "Invalid admin password")
+    return {"token": token, "expires_in": 86400}
+
+
+@app.get("/v1/admin/login")
+async def admin_verify_session(_admin: bool = Depends(require_admin)):
+    """Verify admin session is still valid."""
+    return {"status": "ok", "role": "admin"}
+
+
+# ── Admin endpoints (all protected) ──
 
 @app.post("/v1/admin/keys")
-async def create_api_key(name: str = "default", plan: str = "free"):
+async def create_api_key(name: str = "default", plan: str = "free", _admin: bool = Depends(require_admin)):
     """Create a new API key. Returns the key — save it, it won't be shown again."""
     if plan not in ("free", "pro", "team", "business"):
         raise HTTPException(400, f"Invalid plan. Choose: free, pro, team, business")
@@ -895,19 +757,19 @@ async def create_api_key(name: str = "default", plan: str = "free"):
 
 
 @app.get("/v1/admin/keys")
-async def list_keys():
+async def list_keys(_admin: bool = Depends(require_admin)):
     """List all API keys (without their secret values)."""
     return {"keys": await key_store.list_keys()}
 
 
 @app.get("/v1/admin/all-keys")
-async def list_all_keys():
+async def list_all_keys(_admin: bool = Depends(require_admin)):
     """List all API keys with user info."""
     return {"keys": admin_api.admin_list_all_keys()}
 
 
 @app.post("/v1/admin/users/{user_id}/plan")
-async def admin_set_plan(user_id: str, plan: str = "pro"):
+async def admin_set_plan(user_id: str, plan: str = "pro", _admin: bool = Depends(require_admin)):
     """Change a user's plan."""
     ok = admin_api.admin_change_user_plan(user_id, plan)
     if not ok:
@@ -916,7 +778,7 @@ async def admin_set_plan(user_id: str, plan: str = "pro"):
 
 
 @app.delete("/v1/admin/users/{user_id}")
-async def admin_delete_user(user_id: str):
+async def admin_delete_user(user_id: str, _admin: bool = Depends(require_admin)):
     """Delete a user and all their keys."""
     ok = admin_api.admin_delete_user(user_id)
     if not ok:
@@ -925,7 +787,7 @@ async def admin_delete_user(user_id: str):
 
 
 @app.get("/v1/admin/users/{user_id}")
-async def admin_user_detail(user_id: str):
+async def admin_user_detail(user_id: str, _admin: bool = Depends(require_admin)):
     """Get user details with all keys."""
     detail = admin_api.admin_user_detail(user_id)
     if not detail:
@@ -934,14 +796,14 @@ async def admin_user_detail(user_id: str):
 
 
 @app.post("/v1/admin/keys/{key_id}/toggle")
-async def admin_toggle_key(key_id: str, enabled: bool = True):
+async def admin_toggle_key(key_id: str, enabled: bool = True, _admin: bool = Depends(require_admin)):
     """Enable or disable an API key."""
     ok = admin_api.admin_toggle_key(key_id, enabled)
     return {"status": "ok", "key_id": key_id, "enabled": enabled}
 
 
 @app.delete("/v1/admin/keys/{key_id}")
-async def admin_revoke_key(key_id: str):
+async def admin_revoke_key(key_id: str, _admin: bool = Depends(require_admin)):
     """Permanently delete an API key."""
     ok = admin_api.admin_revoke_key(key_id)
     if not ok:
