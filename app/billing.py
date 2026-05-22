@@ -13,9 +13,9 @@ DOMAIN = os.environ.get("DOMAIN", "https://codeshot-api-production.up.railway.ap
 
 # Price IDs — set these in Railway env vars, or defaults
 PRICE_IDS = {
-    "pro": os.environ.get("STRIPE_PRICE_PRO", "price_pro_monthly"),
-    "team": os.environ.get("STRIPE_PRICE_TEAM", "price_team_monthly"),
-    "business": os.environ.get("STRIPE_PRICE_BUSINESS", "price_business_monthly"),
+    "pro": os.environ.get("STRIPE_PRICE_PRO", "price_1TZfqJHMkYtoDU24yPATdwHt"),
+    "team": os.environ.get("STRIPE_PRICE_TEAM", "price_1TZft1HMkYtoDU24ogtfAbqL"),
+    "business": os.environ.get("STRIPE_PRICE_BUSINESS", "price_1TZfw3HMkYtoDU24U9ngLp6y"),
 }
 
 
@@ -49,7 +49,7 @@ async def create_lifetime_checkout() -> dict:
     if not stripe.api_key or stripe.api_key == "":
         raise ValueError("STRIPE_SECRET_KEY not configured")
     
-    lifetime_price = os.environ.get("STRIPE_PRICE_LIFETIME", "price_lifetime")
+    lifetime_price = os.environ.get("STRIPE_PRICE_LIFETIME", "price_1TZrmvHMkYtoDU24K3hf9NE9")
     
     session = stripe.checkout.Session.create(
         line_items=[{
