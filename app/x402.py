@@ -106,8 +106,10 @@ def build_payment_required(path: str) -> dict:
                         "body": body_schema,
                     },
                     "output": {
-                        "type": "image/png",
-                        "description": "Rendered code screenshot",
+                        "type": "object",
+                        "properties": {
+                            "image": {"type": "string", "format": "binary", "description": "PNG image data"}
+                        },
                     },
                 },
             },
