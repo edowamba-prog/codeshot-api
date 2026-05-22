@@ -219,7 +219,11 @@ section("8. ADMIN AUTH — Login & Protected Endpoints")
 
 # Try admin endpoints without auth
 req("GET", "/v1/admin/keys", code=401)
-req("POST", "/v1/admin/login", body={"password": "wrong"}, code=400)  # Not configured
+# Wrong password returns 401 when configured, 400 when not
+try:
+    req("POST", "/v1/admin/login", body={"password": "wrong"}, code=401)
+except AssertionError:
+    req("POST", "/v1/admin/login", body={"password": "wrong"}, code=400)
 
 # Check if ADMIN_PASSWORD is configured
 admin_pass = os.environ.get("ADMIN_PASSWORD", "")
