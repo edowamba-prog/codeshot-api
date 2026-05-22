@@ -215,10 +215,9 @@ class X402Middleware(_BaseMW):
             if not proof:
                 import base64 as _b64
                 pr = build_payment_required(path)
-                body = pr.model_dump()
-                body_b64 = _b64.b64encode(json.dumps(body).encode()).decode()
+                body_b64 = _b64.b64encode(json.dumps(pr).encode()).decode()
                 return JSONResponse(
-                    body,
+                    pr,
                     status_code=402,
                     headers={"PAYMENT-REQUIRED": body_b64},
                 )

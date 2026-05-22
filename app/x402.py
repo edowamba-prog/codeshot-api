@@ -1,7 +1,5 @@
 """
-x402 Payment Protocol for CodeShot API.
-Uses the official x402 Python SDK for spec-compliant 402 responses.
-https://github.com/x402-foundation/x402
+x402 Payment Protocol for CodeShot API — V2 format for x402scan compatibility.
 """
 
 import os
@@ -9,8 +7,6 @@ import json
 import time
 import base64
 from typing import Optional
-
-from x402 import PaymentRequiredV1
 
 # ── Configuration ──
 
@@ -29,93 +25,97 @@ CHAIN_ID = 8453
 MAX_PROOF_AGE = 300
 
 
-def build_payment_required(path: str) -> PaymentRequiredV1:
-    """Build an x402 PaymentRequiredV1 response using the official SDK."""
-    price = AGENT_PRICES.get(path, "0.01")
-    resource = f"{DOMAIN}{path}"
-    
-    # Input schema for each endpoint (derived from OpenAPI)
-    endpoint = path.split("/")[-1]
+def _schema_for(endpoint: str) -> dict:
+    """Return the JSON schema for an endpoint's request body."""
     schemas = {
         "screenshot": {
-            "type": "object",
-            "required": ["code"],
+            "type": "object", "required": ["code"],
             "properties": {
-                "code": {"type": "string", "description": "Source code to render"},
-                "language": {"type": "string", "default": "plaintext"},
-                "theme": {"type": "string", "default": "dracula"},
+                "code": {"type": "string"},
+                "language": {"type": "string"},
+                "theme": {"type": "string"},
                 "preset": {"type": "string"},
                 "watermark": {"type": "string"},
-                "format": {"type": "string", "enum": ["png", "html"], "default": "png"},
+                "format": {"type": "string", "enum": ["png", "html"]},
             },
-            "example": {"code": "print('hello')", "language": "python", "theme": "dracula"},
         },
         "diff": {
-            "type": "object",
-            "required": ["old_code", "new_code"],
+            "type": "object", "required": ["old_code", "new_code"],
             "properties": {
                 "old_code": {"type": "string"},
                 "new_code": {"type": "string"},
-                "language": {"type": "string", "default": "plaintext"},
-                "theme": {"type": "string", "default": "dracula"},
-                "mode": {"type": "string", "enum": ["unified", "side-by-side"], "default": "unified"},
+                "language": {"type": "string"},
+                "theme": {"type": "string"},
+                "mode": {"type": "string", "enum": ["unified", "side-by-side"]},
             },
-            "example": {"old_code": "x=1", "new_code": "x=2", "language": "python"},
         },
         "animate": {
-            "type": "object",
-            "required": ["code"],
+            "type": "object", "required": ["code"],
             "properties": {
                 "code": {"type": "string"},
-                "language": {"type": "string", "default": "plaintext"},
-                "theme": {"type": "string", "default": "dracula"},
-                "effect": {"type": "string", "enum": ["typewriter", "reveal-line", "fade-in"], "default": "typewriter"},
-                "duration": {"type": "number", "default": 4.0},
-                "format": {"type": "string", "enum": ["mp4", "gif"], "default": "mp4"},
+                "language": {"type": "string"},
+                "theme": {"type": "string"},
+                "effect": {"type": "string", "enum": ["typewriter", "reveal-line", "fade-in"]},
+                "duration": {"type": "number"},
+                "format": {"type": "string", "enum": ["mp4", "gif"]},
             },
-            "example": {"code": "print('hello')", "effect": "typewriter"},
         },
         "annotate": {
-            "type": "object",
-            "required": ["code"],
+            "type": "object", "required": ["code"],
             "properties": {
                 "code": {"type": "string"},
-                "language": {"type": "string", "default": "plaintext"},
-                "theme": {"type": "string", "default": "dracula"},
-                "focus": {"type": "string", "enum": ["general", "error-handling", "performance", "security", "patterns"], "default": "general"},
+                "language": {"type": "string"},
+                "theme": {"type": "string"},
+                "focus": {"type": "string", "enum": ["general", "error-handling", "performance", "security", "patterns"]},
             },
-            "example": {"code": "def foo(): pass", "focus": "general"},
         },
     }
-    schema = schemas.get(endpoint, schemas["screenshot"])
-    
-    return PaymentRequiredV1(
-        accepts=[{
+    return schemas.get(endpoint, schemas["screenshot"])
+
+
+def build_payment_required(path: str) -> dict:
+    """Build an x402 V2 PaymentRequired response for x402scan compatibility."""
+    price = AGENT_PRICES.get(path, "0.01")
+    endpoint = path.split("/")[-1]
+    resource_url = f"{DOMAIN}{path}"
+    body_schema = _schema_for(endpoint)
+
+    return {
+        "x402Version": 2,
+        "accepts": [{
             "scheme": "exact",
-            "network": "evm",
+            "network": f"eip155:{CHAIN_ID}",       # CAIP-2 format
+            "amount": price,
             "payTo": EVM_PAYEE_ADDRESS,
-            "asset": "USDC",
-            "resource": resource,
-            "maxAmountRequired": price,
             "maxTimeoutSeconds": MAX_PROOF_AGE,
+            "asset": BASE_USDC,
+            "extra": {},
+        }],
+        "resource": {
+            "url": resource_url,
             "description": f"CodeShot — {endpoint}",
-            "networkPayload": {
-                "token": BASE_USDC,
-                "chainId": CHAIN_ID,
+            "mimeType": "application/json",
+        },
+        "extensions": {
+            "bazaar": {
+                "info": {
+                    "input": {
+                        "type": "http",
+                        "method": "POST",
+                        "bodyType": "json",
+                        "body": body_schema,
+                    },
+                    "output": {
+                        "type": "image/png",
+                    },
+                },
             },
-            "extra": {
-                "bazaar": {
-                    "info": {
-                        "inputSchema": schema,
-                    }
-                }
-            },
-        }]
-    )
+        },
+    }
 
 
 def build_openapi_payment_info(path: str) -> dict:
-    """Build x402 payment metadata for OpenAPI spec — matches x402scan discovery spec."""
+    """Build x402 payment metadata for OpenAPI spec."""
     price = AGENT_PRICES.get(path, "0.01")
     return {
         "x-payment-info": {
@@ -133,7 +133,6 @@ def verify_payment_signature(sig_header: str, payee: str, amount: str) -> tuple[
     """Verify an x402 PAYMENT-SIGNATURE via EIP-191."""
     if not sig_header:
         return False, "Missing PAYMENT-SIGNATURE"
-    
     try:
         payload = json.loads(sig_header)
     except json.JSONDecodeError:
@@ -141,23 +140,17 @@ def verify_payment_signature(sig_header: str, payee: str, amount: str) -> tuple[
             payload = json.loads(base64.b64decode(sig_header).decode())
         except Exception:
             return False, "Invalid format"
-    
     signature = payload.get("signature", "")
     message = payload.get("message", {})
-    
     if not signature or not message:
         return False, "Incomplete payload"
-    
     msg_ts = message.get("timestamp", 0)
     if abs(time.time() - msg_ts) > MAX_PROOF_AGE:
         return False, f"Expired (>{MAX_PROOF_AGE}s)"
-    
     if str(message.get("amount", "")) != amount:
         return False, "Amount mismatch"
-    
     if message.get("payee", "").lower() != payee.lower():
         return False, "Payee mismatch"
-    
     try:
         from eth_account.messages import encode_defunct
         from eth_account import Account
