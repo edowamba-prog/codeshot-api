@@ -17,7 +17,7 @@ from .diff import build_diff_html, compute_diff, count_changes
 from .animate import build_animated_html, render_animation, ANIMATION_EFFECTS
 from .annotate import analyze_code, build_annotated_html
 from .auth import APIKeyMiddleware, key_store, rate_limiter, create_default_key
-from .billing import create_checkout_session, create_lifetime_checkout, handle_webhook, get_key_for_session
+from .billing import create_checkout_session, handle_webhook, get_key_for_session
 from .users import (
     create_user, authenticate, get_user, get_user_by_email, list_users,
     create_token, verify_token, create_user_api_key, get_user_api_keys,
@@ -483,16 +483,6 @@ async def billing_checkout(plan: str = "pro"):
     """Create a Stripe Checkout session. Returns URL to redirect user to."""
     try:
         result = await create_checkout_session(plan)
-        return result
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-
-
-@app.post("/v1/billing/checkout-lifetime")
-async def billing_lifetime():
-    """Create a one-time payment checkout for lifetime Pro access ($49)."""
-    try:
-        result = await create_lifetime_checkout()
         return result
     except ValueError as e:
         raise HTTPException(400, str(e))

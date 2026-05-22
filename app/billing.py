@@ -44,27 +44,6 @@ async def create_checkout_session(plan: str = "pro") -> dict:
     return {"url": session.url, "session_id": session.id}
 
 
-async def create_lifetime_checkout() -> dict:
-    """Create a one-time payment for lifetime Pro access ($49)."""
-    if not stripe.api_key or stripe.api_key == "":
-        raise ValueError("STRIPE_SECRET_KEY not configured")
-    
-    lifetime_price = os.environ.get("STRIPE_PRICE_LIFETIME", "price_1TZrzVHMkYtoDU24yGnH9K8f")
-    
-    session = stripe.checkout.Session.create(
-        line_items=[{
-            "price": lifetime_price,
-            "quantity": 1,
-        }],
-        mode="payment",
-        success_url=f"{DOMAIN}/v1/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
-        cancel_url=f"{DOMAIN}/#pricing",
-        metadata={"plan": "pro", "lifetime": "true"},
-    )
-    
-    return {"url": session.url, "session_id": session.id}
-
-
 async def handle_webhook(payload: bytes, signature: str) -> dict:
     """Process a Stripe webhook event. On checkout.session.completed, 
     generates an API key and stores it for the success page.
