@@ -2,12 +2,15 @@
 API key management and rate limiting middleware.
 """
 
+import os
 import time
 import uuid
 import hashlib
 import asyncio
 import json
 from pathlib import Path
+
+DOMAIN = os.environ.get("DOMAIN", "https://codeshot-api-production.up.railway.app")
 from typing import Optional
 from collections import defaultdict
 
@@ -184,7 +187,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         
         if not api_key:
             return JSONResponse(
-                {"detail": "API key required. Get one at https://drmadmeow.up.railway.app/dashboard"},
+                {"detail": f"API key required. Get one at {DOMAIN}/dashboard"},
                 status_code=401
             )
         
@@ -201,7 +204,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         
         if not allowed:
             return JSONResponse(
-                {"detail": "Rate limit exceeded. Upgrade at https://drmadmeow.up.railway.app/dashboard"},
+                {"detail": f"Rate limit exceeded. Upgrade at {DOMAIN}/dashboard"},
                 status_code=429,
                 headers=headers
             )
