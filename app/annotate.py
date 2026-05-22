@@ -136,9 +136,17 @@ def build_annotated_html(
     
     t = THEMES.get(theme, THEMES["dracula"])
     if brand:
-        t = {**t, **{k: v for k, v in brand.items() if v is not None}}
+        # Sanitize brand CSS
+        import re as _re
+        def _sanitize(v):
+            if not isinstance(v, str): return v
+            return _re.sub(r'</?style[^>]*>', '', v, flags=_re.IGNORECASE)[:200]
+        clean = {k: _sanitize(v) for k, v in brand.items() if v is not None}
+        t = {**t, **clean}
     
-    lang_name = LANGUAGES.get(language, language.capitalize())
+    esc = lambda s: s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    
+    lang_name = LANGUAGES.get(language, esc(language[:30]))
     lines = code.split('\n')
     line_count = len(lines)
     

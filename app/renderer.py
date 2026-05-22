@@ -67,7 +67,15 @@ def build_html(
     # Resolve theme
     t = THEMES.get(theme, THEMES["dracula"])
     if brand:
-        t = {**t, **{k: v for k, v in brand.items() if v is not None}}
+        # Sanitize brand CSS: strip style-close / HTML injection patterns
+        import re as _re
+        def _sanitize_css(v):
+            if not isinstance(v, str):
+                return v
+            v = _re.sub(r'</?style[^>]*>', '', v, flags=_re.IGNORECASE)
+            return v[:200]
+        clean_brand = {k: _sanitize_css(v) for k, v in brand.items() if v is not None}
+        t = {**t, **clean_brand}
     
     # Resolve preset dimensions
     if preset and preset in SOCIAL_PRESETS:
@@ -77,8 +85,12 @@ def build_html(
     width = width or 900
     height = height or 500
     
+    # Escape helpers
+    def esc(s: str) -> str:
+        return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    
     # Language badge
-    lang_name = LANGUAGES.get(language, language.capitalize())
+    lang_name = LANGUAGES.get(language, esc(language[:30]))
     
     # Resolve highlight.js theme
     hl_theme = HIGHLIGHT_THEME_MAP.get(theme, "dracula")
@@ -106,14 +118,14 @@ def build_html(
             <span class="dot dot-red"></span>
             <span class="dot dot-yellow"></span>
             <span class="dot dot-green"></span>
-            <span class="window-title">{title or f'{lang_name} • {line_count} lines'}</span>
+            <span class="window-title">{esc(title) if title else f'{lang_name} • {line_count} lines'}</span>
         </div>
         """
     
     # Watermark
     watermark_html = ""
     if watermark:
-        watermark_html = f'<div class="watermark">{watermark}</div>'
+        watermark_html = f'<div class="watermark">{esc(watermark)}</div>'
     
     # Language badge
     badge_html = ""
