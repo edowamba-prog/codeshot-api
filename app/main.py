@@ -61,7 +61,7 @@ def custom_openapi():
                     "summary": "Code screenshot — $0.01",
                     "description": "Render code as a beautiful PNG screenshot. Pay-per-use via x402.",
                     "operationId": "createScreenshot",
-                    "security": [],
+                    
                     "x-payment-info": build_openapi_payment_info("/v1/agent/screenshot")["x-payment-info"],
                     "requestBody": {
                         "required": True,
@@ -94,7 +94,7 @@ def custom_openapi():
                     "summary": "Code diff — $0.01",
                     "description": "Render code diff as PNG. Pay-per-use via x402.",
                     "operationId": "createDiff",
-                    "security": [],
+                    
                     "x-payment-info": build_openapi_payment_info("/v1/agent/diff")["x-payment-info"],
                     "requestBody": {
                         "required": True,
@@ -123,7 +123,7 @@ def custom_openapi():
                     "summary": "Animated code — $0.05",
                     "description": "Render animated code as MP4/GIF. Pay-per-use via x402.",
                     "operationId": "createAnimation",
-                    "security": [],
+                    
                     "x-payment-info": build_openapi_payment_info("/v1/agent/animate")["x-payment-info"],
                     "requestBody": {
                         "required": True,
@@ -153,7 +153,7 @@ def custom_openapi():
                     "summary": "AI-annotated code — $0.03",
                     "description": "AI analyzes and annotates code. Pay-per-use via x402.",
                     "operationId": "createAnnotation",
-                    "security": [],
+                    
                     "x-payment-info": build_openapi_payment_info("/v1/agent/annotate")["x-payment-info"],
                     "requestBody": {
                         "required": True,
