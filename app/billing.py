@@ -49,7 +49,7 @@ async def create_lifetime_checkout() -> dict:
     if not stripe.api_key or stripe.api_key == "":
         raise ValueError("STRIPE_SECRET_KEY not configured")
     
-    lifetime_price = os.environ.get("STRIPE_PRICE_LIFETIME", "price_1TZrmvHMkYtoDU24K3hf9NE9")
+    lifetime_price = os.environ.get("STRIPE_PRICE_LIFETIME", "price_1TZrzVHMkYtoDU24yGnH9K8f")
     
     session = stripe.checkout.Session.create(
         line_items=[{
