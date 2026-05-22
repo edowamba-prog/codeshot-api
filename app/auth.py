@@ -164,6 +164,7 @@ NO_API_KEY_PREFIXES = [
     "/admin",
     "/v1/agent",     # x402 paid agent endpoints
     "/openapi.json",  # agent discovery
+    "/.well-known",   # x402 compatibility discovery
 ]
 
 key_store = APIKeyStore()

@@ -53,27 +53,16 @@ def build_payment_required(path: str) -> PaymentRequiredV1:
 
 
 def build_openapi_payment_info(path: str) -> dict:
-    """Build x402 payment metadata for OpenAPI spec."""
+    """Build x402 payment metadata for OpenAPI spec — matches x402scan discovery spec."""
     price = AGENT_PRICES.get(path, "0.01")
     return {
         "x-payment-info": {
-            "protocols": {
-                "x402": {
-                    "networks": [{
-                        "network": "evm",
-                        "chainId": CHAIN_ID,
-                        "token": "USDC",
-                        "tokenAddress": BASE_USDC,
-                        "decimals": 6,
-                    }],
-                    "payTo": EVM_PAYEE_ADDRESS,
-                    "pricing": {
-                        "amount": price,
-                        "currency": "USD",
-                        "mode": "exact",
-                    },
-                }
-            }
+            "protocols": ["x402"],
+            "price": {
+                "mode": "fixed",
+                "currency": "USD",
+                "amount": price,
+            },
         }
     }
 

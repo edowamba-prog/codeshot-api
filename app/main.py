@@ -96,6 +96,25 @@ def custom_openapi():
                     "operationId": "createDiff",
                     "security": [],
                     "x-payment-info": build_openapi_payment_info("/v1/agent/diff")["x-payment-info"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["old_code", "new_code"],
+                                    "properties": {
+                                        "old_code": {"type": "string", "description": "Original code"},
+                                        "new_code": {"type": "string", "description": "Updated code"},
+                                        "language": {"type": "string", "default": "plaintext"},
+                                        "theme": {"type": "string", "default": "dracula"},
+                                        "mode": {"type": "string", "enum": ["unified", "side-by-side"], "default": "unified"},
+                                    },
+                                },
+                                "example": {"old_code": "x = 1", "new_code": "x = 2", "language": "python", "theme": "dracula"},
+                            }
+                        },
+                    },
                     "responses": {"200": {"description": "PNG"}, "402": {"description": "Payment required"}},
                 }
             },
@@ -106,6 +125,26 @@ def custom_openapi():
                     "operationId": "createAnimation",
                     "security": [],
                     "x-payment-info": build_openapi_payment_info("/v1/agent/animate")["x-payment-info"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["code"],
+                                    "properties": {
+                                        "code": {"type": "string", "description": "Source code"},
+                                        "language": {"type": "string", "default": "plaintext"},
+                                        "theme": {"type": "string", "default": "dracula"},
+                                        "effect": {"type": "string", "enum": ["typewriter", "reveal-line", "fade-in"], "default": "typewriter"},
+                                        "duration": {"type": "number", "default": 4.0},
+                                        "format": {"type": "string", "enum": ["mp4", "gif"], "default": "mp4"},
+                                    },
+                                },
+                                "example": {"code": "print('hello')", "language": "python", "effect": "typewriter", "duration": 2.0},
+                            }
+                        },
+                    },
                     "responses": {"200": {"description": "MP4/GIF"}, "402": {"description": "Payment required"}},
                 }
             },
@@ -116,6 +155,24 @@ def custom_openapi():
                     "operationId": "createAnnotation",
                     "security": [],
                     "x-payment-info": build_openapi_payment_info("/v1/agent/annotate")["x-payment-info"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["code"],
+                                    "properties": {
+                                        "code": {"type": "string", "description": "Source code to annotate"},
+                                        "language": {"type": "string", "default": "plaintext"},
+                                        "theme": {"type": "string", "default": "dracula"},
+                                        "focus": {"type": "string", "enum": ["general", "error-handling", "performance", "security", "patterns"], "default": "general"},
+                                    },
+                                },
+                                "example": {"code": "def foo():\\n    pass", "language": "python", "focus": "general"},
+                            }
+                        },
+                    },
                     "responses": {"200": {"description": "PNG"}, "402": {"description": "Payment required"}},
                 }
             },
@@ -123,6 +180,23 @@ def custom_openapi():
     }
 
 app.openapi = custom_openapi
+
+# ── x402 Well-Known (compatibility discovery) ──
+
+@app.get("/.well-known/x402")
+async def x402_well_known():
+    """x402scan compatibility discovery — lists payable resources."""
+    domain = os.environ.get("DOMAIN", "https://drmadmeow.up.railway.app")
+    return {
+        "version": 1,
+        "resources": [
+            f"{domain}/v1/agent/screenshot",
+            f"{domain}/v1/agent/diff",
+            f"{domain}/v1/agent/animate",
+            f"{domain}/v1/agent/annotate",
+        ],
+    }
+
 
 # Add auth middleware
 app.add_middleware(APIKeyMiddleware)
