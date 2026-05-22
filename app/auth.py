@@ -162,6 +162,8 @@ NO_API_KEY_PREFIXES = [
     "/v1/me",
     "/dashboard",
     "/admin",
+    "/v1/agent",     # x402 paid agent endpoints
+    "/openapi.json",  # agent discovery
 ]
 
 key_store = APIKeyStore()
@@ -176,6 +178,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         
         # Skip API key auth for public pages and auth endpoints
         if path in PUBLIC_PATHS or any(path.startswith(p) for p in NO_API_KEY_PREFIXES):
+            return await call_next(request)
+        
+        # Skip auth for x402-paid requests (payment already verified)
+        if getattr(request.state, "x402_paid", None):
             return await call_next(request)
         
         # Check API key

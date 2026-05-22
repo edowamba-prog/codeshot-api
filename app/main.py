@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, Literal
 import time
 import os
+import json
 
 from .themes import THEMES, SOCIAL_PRESETS, LANGUAGES
 from .renderer import build_html
@@ -26,6 +27,10 @@ from .users import (
     update_user_plan, get_user_usage_history, ensure_user_api_key,
 )
 from . import admin_api
+from .x402 import (
+    is_x402_path, agent_path_to_real, build_payment_info,
+    get_price_for_path, verify_payment_proof, EVM_PAYEE_ADDRESS,
+)
 
 app = FastAPI(
     title="CodeShot API",
@@ -37,6 +42,49 @@ app = FastAPI(
 
 # Add auth middleware
 app.add_middleware(APIKeyMiddleware)
+
+# Add x402 payment middleware for agent endpoints
+from starlette.middleware.base import BaseHTTPMiddleware as _BaseMW
+class X402Middleware(_BaseMW):
+    """Middleware that enforces x402 payment on /v1/agent/* paths."""
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        
+        if is_x402_path(path):
+            proof = request.headers.get("X-Payment-Proof", "")
+            price = get_price_for_path(path)
+            
+            if not proof:
+                # Return 402 Payment Required
+                info = build_payment_info(path)
+                return JSONResponse(
+                    {
+                        "detail": "Payment required",
+                        "type": "https://docs.x402.org/payment-required",
+                        **info,
+                    },
+                    status_code=402,
+                    headers={"X-Payment-Info": json.dumps(info)},
+                )
+            
+            # Verify payment proof
+            valid, result = verify_payment_proof(proof, price, EVM_PAYEE_ADDRESS)
+            if not valid:
+                return JSONResponse(
+                    {"detail": f"Payment verification failed: {result}"},
+                    status_code=402,
+                )
+            
+            # Rewrite path to real endpoint and mark as internally paid
+            real_path = agent_path_to_real(path)
+            request.scope["path"] = real_path
+            request.scope["raw_path"] = real_path.encode()
+            request.state.x402_paid = result  # wallet address
+            request.state.x402_path = path
+        
+        return await call_next(request)
+
+app.add_middleware(X402Middleware)
 
 # Include routers
 app.include_router(brands_router.router)
@@ -809,6 +857,89 @@ async def admin_revoke_key(key_id: str, _admin: bool = Depends(require_admin)):
     if not ok:
         raise HTTPException(404, "Key not found")
     return {"status": "revoked", "key_id": key_id}
+
+
+# ── Agent Discovery (x402 / AgentCash) ──
+
+@app.get("/openapi.json")
+async def agent_discovery():
+    """OpenAPI 3.1 spec with x402 payment metadata for agent discovery."""
+    domain = os.environ.get("DOMAIN", "https://drmadmeow.up.railway.app")
+    return {
+        "openapi": "3.1.0",
+        "info": {
+            "title": "CodeShot API",
+            "description": "Beautiful code screenshots via API. Pay-per-use for AI agents via x402.",
+            "version": "1.0.0",
+            "x-guidance": "Use POST /v1/agent/screenshot to generate code screenshots. Payment required via x402. Send X-Payment-Proof header with signed proof.",
+        },
+        "servers": [{"url": domain}],
+        "paths": {
+            "/v1/agent/screenshot": {
+                "post": {
+                    "summary": "Generate code screenshot",
+                    "description": "Render code as a beautiful PNG screenshot. $0.01 per request.",
+                    "operationId": "createScreenshot",
+                    "x-payment-info": build_payment_info("/v1/agent/screenshot")["x-payment-info"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["code"],
+                                    "properties": {
+                                        "code": {"type": "string", "description": "Source code to render"},
+                                        "language": {"type": "string", "default": "plaintext"},
+                                        "theme": {"type": "string", "default": "dracula"},
+                                        "preset": {"type": "string", "description": "Social media preset"},
+                                        "watermark": {"type": "string"},
+                                        "format": {"type": "string", "enum": ["png", "html"], "default": "png"},
+                                    },
+                                },
+                                "example": {
+                                    "code": "def hello():\\n    print('Hello, World!')",
+                                    "language": "python",
+                                    "theme": "dracula",
+                                },
+                            }
+                        },
+                    },
+                    "responses": {
+                        "200": {"description": "PNG screenshot", "content": {"image/png": {}}},
+                        "402": {"description": "Payment required — send X-Payment-Proof"},
+                    },
+                }
+            },
+            "/v1/agent/diff": {
+                "post": {
+                    "summary": "Generate diff screenshot",
+                    "description": "Render code diff as PNG. $0.01 per request.",
+                    "operationId": "createDiff",
+                    "x-payment-info": build_payment_info("/v1/agent/diff")["x-payment-info"],
+                    "responses": {"200": {"description": "PNG"}, "402": {"description": "Payment required"}},
+                }
+            },
+            "/v1/agent/animate": {
+                "post": {
+                    "summary": "Generate animated code screenshot",
+                    "description": "Render animated code as MP4/GIF. $0.05 per request.",
+                    "operationId": "createAnimation",
+                    "x-payment-info": build_payment_info("/v1/agent/animate")["x-payment-info"],
+                    "responses": {"200": {"description": "MP4/GIF"}, "402": {"description": "Payment required"}},
+                }
+            },
+            "/v1/agent/annotate": {
+                "post": {
+                    "summary": "AI-annotated code screenshot",
+                    "description": "AI analyzes code and adds callout annotations. $0.03 per request.",
+                    "operationId": "createAnnotation",
+                    "x-payment-info": build_payment_info("/v1/agent/annotate")["x-payment-info"],
+                    "responses": {"200": {"description": "PNG"}, "402": {"description": "Payment required"}},
+                }
+            },
+        },
+    }
 
 
 @app.on_event("startup")
