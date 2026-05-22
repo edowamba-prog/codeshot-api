@@ -659,7 +659,7 @@ body{font-family:system-ui;background:#0a0a0a;color:#e2e8f0;min-height:100vh}
     <div class="card">
       <h2>Quick Test</h2>
       <div style="font-family:monospace;font-size:13px;color:#64748b;margin-bottom:8px">
-        curl -X POST https://codeshot-api-production.up.railway.app/v1/screenshot \\
+        curl -X POST https://drmadmeow.up.railway.app/v1/screenshot \\
         <br>  -H "Authorization: Bearer <span style="color:#3b82f6">YOUR_KEY</span>" \\
         <br>  -H "Content-Type: application/json" \\
         <br>  -d '{"code":"print(42)","language":"python","theme":"dracula"}'

@@ -10,7 +10,7 @@ import asyncio
 import json
 from pathlib import Path
 
-DOMAIN = os.environ.get("DOMAIN", "https://codeshot-api-production.up.railway.app")
+DOMAIN = os.environ.get("DOMAIN", "https://drmadmeow.up.railway.app")
 from typing import Optional
 from collections import defaultdict
 
