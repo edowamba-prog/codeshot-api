@@ -195,6 +195,22 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         
         key_info = await key_store.validate(api_key)
         if not key_info:
+            # Fallback: check SQLite (keys created via dashboard / agent endpoint)
+            from .users import get_db
+            import hashlib as _hashlib
+            kh = _hashlib.sha256(api_key.encode()).hexdigest()
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT k.plan, k.enabled, u.email FROM api_keys k JOIN users u ON k.user_id = u.id WHERE k.key_hash = ?",
+                    (kh,)
+                ).fetchone()
+                if row and row["enabled"]:
+                    key_info = {"plan": row["plan"], "name": row["email"], "enabled": True, "created": 0}
+            finally:
+                conn.close()
+        
+        if not key_info:
             return JSONResponse(
                 {"detail": "Invalid or disabled API key"},
                 status_code=403

@@ -366,13 +366,12 @@ def get_user_usage_history(user_id: str, days: int = 30) -> list[dict]:
 
 def ensure_user_api_key(user_id: str, name: str = "default") -> str:
     """Get or create an API key for a user. Returns the raw key.
-    Registers in both SQLite (usage tracking) and legacy JSON store (auth middleware)."""
+    Key is stored in SQLite. Auth middleware validates against both SQLite and JSON store."""
     conn = get_db()
     try:
         raw_key = f"cs_{uuid.uuid4().hex[:24]}"
         key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
         
-        # Get user's plan
         user = conn.execute("SELECT plan FROM users WHERE id = ?", (user_id,)).fetchone()
         plan = user["plan"] if user else "free"
         
@@ -381,18 +380,6 @@ def ensure_user_api_key(user_id: str, name: str = "default") -> str:
             (str(uuid.uuid4()), user_id, name, key_hash, plan, time.time())
         )
         conn.commit()
-        
-        # Also register in legacy JSON key store so auth middleware validates it
-        from .auth import key_store
-        import asyncio
-        async def _register():
-            await key_store._register_raw(raw_key, name, plan)
-        try:
-            asyncio.get_event_loop()
-            asyncio.create_task(_register())
-        except RuntimeError:
-            pass  # No event loop (tests), skip JSON registration
-        
         return raw_key
     finally:
         conn.close()
