@@ -173,7 +173,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         
         if not api_key:
             return JSONResponse(
-                {"detail": "API key required. Get one at https://codeshot.io"},
+                {"detail": "API key required. Get one at https://drmadmeow.up.railway.app/dashboard"},
                 status_code=401
             )
         
@@ -190,7 +190,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         
         if not allowed:
             return JSONResponse(
-                {"detail": "Rate limit exceeded. Upgrade at https://codeshot-api.com/dashboard"},
+                {"detail": "Rate limit exceeded. Upgrade at https://drmadmeow.up.railway.app/dashboard"},
                 status_code=429,
                 headers=headers
             )

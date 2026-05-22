@@ -9,7 +9,7 @@ from .auth import key_store
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-DOMAIN = os.environ.get("DOMAIN", "https://codeshot-api-production.up.railway.app")
+DOMAIN = os.environ.get("DOMAIN", "https://drmadmeow.up.railway.app")
 
 # Price IDs — set these in Railway env vars, or defaults
 PRICE_IDS = {
