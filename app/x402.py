@@ -66,7 +66,7 @@ def build_payment_required(path: str) -> dict:
 
 
 def build_openapi_payment_info(path: str) -> dict:
-    price = AGENT_PRICES.get(path, "0.01")
+    price = get_price(path)
     return {
         "x-payment-info": {
             "protocols": [{"x402": {}}],
