@@ -81,7 +81,7 @@ def build_openapi_payment_info(path: str) -> dict:
         "x-payment-info": {
             "protocols": [
                 {"x402": {}},
-                {"mpp": {"method": "", "intent": "", "currency": ""}},
+                {"mpp": {"method": "POST", "intent": "pay", "currency": "USDC"}},
             ],
             "price": {
                 "mode": "fixed",
