@@ -7,14 +7,25 @@ EVM_PAYEE_ADDRESS = os.environ.get("EVM_PAYEE_ADDRESS", "0xed6881b56690C26189d91
 DOMAIN = os.environ.get("DOMAIN", "https://drmadmeow.up.railway.app")
 BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 MAX_PROOF_AGE = 300
-AGENT_PRICES = {"/v1/screenshot":"0.01","/v1/diff":"0.01","/v1/animate":"0.05","/v1/annotate":"0.03"}
+AGENT_PRICES = {
+    "/v1/screenshot": "0.01",
+    "/v1/diff": "0.01",
+    "/v1/animate": "0.05",
+    "/v1/annotate": "0.03",
+    "/v1/webshot": "0.01",
+    "/v1/scrape": "0.01",
+    "/v1/preview": "0.005",
+}
 
 def _schema(ep):
     s = {
-        "screenshot":{"type":"object","required":["code"],"properties":{"code":{"type":"string"},"language":{"type":"string"}}},
-        "diff":{"type":"object","required":["old_code","new_code"],"properties":{"old_code":{"type":"string"},"new_code":{"type":"string"}}},
-        "animate":{"type":"object","required":["code"],"properties":{"code":{"type":"string"},"effect":{"type":"string","enum":["typewriter","reveal-line","fade-in"]}}},
-        "annotate":{"type":"object","required":["code"],"properties":{"code":{"type":"string"},"focus":{"type":"string","enum":["general","error-handling","performance","security","patterns"]}}},
+        "screenshot": {"type": "object", "required": ["code"], "properties": {"code": {"type": "string"}, "language": {"type": "string"}}},
+        "diff": {"type": "object", "required": ["old_code", "new_code"], "properties": {"old_code": {"type": "string"}, "new_code": {"type": "string"}}},
+        "animate": {"type": "object", "required": ["code"], "properties": {"code": {"type": "string"}, "effect": {"type": "string", "enum": ["typewriter", "reveal-line", "fade-in"]}}},
+        "annotate": {"type": "object", "required": ["code"], "properties": {"code": {"type": "string"}, "focus": {"type": "string", "enum": ["general", "error-handling", "performance", "security", "patterns"]}}},
+        "webshot": {"type": "object", "required": ["url"], "properties": {"url": {"type": "string"}, "width": {"type": "integer"}, "height": {"type": "integer"}, "full_page": {"type": "boolean"}}},
+        "scrape": {"type": "object", "required": ["url"], "properties": {"url": {"type": "string"}, "format": {"type": "string"}}},
+        "preview": {"type": "object", "required": ["url"], "properties": {"url": {"type": "string"}}},
     }
     return s.get(ep, s["screenshot"])
 

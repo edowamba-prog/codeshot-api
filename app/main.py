@@ -20,6 +20,7 @@ from .diff import build_diff_html, compute_diff, count_changes
 from .animate import build_animated_html, render_animation, ANIMATION_EFFECTS
 from .annotate import analyze_code, build_annotated_html
 from .auth import APIKeyMiddleware, key_store, rate_limiter, create_default_key
+from .webtools import capture_url_screenshot, scrape_url_text, get_link_preview
 from .billing import create_checkout_session, handle_webhook, get_key_for_session
 from .users import (
     create_user, authenticate, get_user, get_user_by_email, list_users,
@@ -195,6 +196,82 @@ def custom_openapi():
                     "responses": {"200": {"description": "Service status"}},
                 }
             },
+            "/v1/agent/webshot": {
+                "post": {
+                    "summary": "Web screenshot — $0.01",
+                    "description": "Take a screenshot of any URL. Pay-per-use via x402.",
+                    "operationId": "createWebshot",
+                    "x-payment-info": build_openapi_payment_info("/v1/agent/webshot")["x-payment-info"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["url"],
+                                    "properties": {
+                                        "url": {"type": "string", "description": "URL to screenshot"},
+                                        "width": {"type": "integer", "default": 1280},
+                                        "height": {"type": "integer", "default": 800},
+                                        "full_page": {"type": "boolean", "default": True},
+                                    },
+                                },
+                                "example": {"url": "https://example.com", "width": 1280, "full_page": True},
+                            }
+                        },
+                    },
+                    "responses": {"200": {"description": "PNG screenshot", "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}}, "402": {"description": "Payment required"}},
+                }
+            },
+            "/v1/agent/scrape": {
+                "post": {
+                    "summary": "Web scrape — $0.01",
+                    "description": "Scrape clean text/markdown from any URL. Pay-per-use via x402.",
+                    "operationId": "createScrape",
+                    "x-payment-info": build_openapi_payment_info("/v1/agent/scrape")["x-payment-info"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["url"],
+                                    "properties": {
+                                        "url": {"type": "string", "description": "URL to scrape"},
+                                        "format": {"type": "string", "enum": ["markdown", "text"], "default": "markdown"},
+                                    },
+                                },
+                                "example": {"url": "https://example.com", "format": "markdown"},
+                            }
+                        },
+                    },
+                    "responses": {"200": {"description": "Scraped content as JSON with title, text, links, metadata"}, "402": {"description": "Payment required"}},
+                }
+            },
+            "/v1/agent/preview": {
+                "post": {
+                    "summary": "Link preview — $0.005",
+                    "description": "Get Open Graph / Twitter Card metadata for any URL. Pay-per-use via x402.",
+                    "operationId": "createPreview",
+                    "x-payment-info": build_openapi_payment_info("/v1/agent/preview")["x-payment-info"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["url"],
+                                    "properties": {
+                                        "url": {"type": "string", "description": "URL to preview"},
+                                    },
+                                },
+                                "example": {"url": "https://example.com"},
+                            }
+                        },
+                    },
+                    "responses": {"200": {"description": "Link preview metadata as JSON"}, "402": {"description": "Payment required"}},
+                }
+            },
         },
         "components": {
             "securitySchemes": {
@@ -227,6 +304,9 @@ async def x402_well_known():
             f"{domain}/v1/agent/diff",
             f"{domain}/v1/agent/animate",
             f"{domain}/v1/agent/annotate",
+            f"{domain}/v1/agent/webshot",
+            f"{domain}/v1/agent/scrape",
+            f"{domain}/v1/agent/preview",
         ],
     }
 
@@ -366,6 +446,26 @@ class AnnotateRequest(BaseModel):
     format: Literal["png", "html"] = Field("png")
 
 
+class WebShotRequest(BaseModel):
+    """Request to take a screenshot of any URL."""
+    url: str = Field(..., description="URL to screenshot", min_length=1, max_length=2000)
+    width: int = Field(1280, ge=320, le=3840, description="Viewport width")
+    height: int = Field(800, ge=200, le=3840, description="Viewport height")
+    full_page: bool = Field(True, description="Capture full page or just viewport")
+    device_scale_factor: float = Field(2.0, ge=1.0, le=4.0)
+
+
+class ScrapeRequest(BaseModel):
+    """Request to scrape text content from a URL."""
+    url: str = Field(..., min_length=1, max_length=2000)
+    format: str = Field("markdown", description="Output format: markdown or text")
+
+
+class PreviewRequest(BaseModel):
+    """Request to get link preview metadata."""
+    url: str = Field(..., min_length=1, max_length=2000)
+
+
 # ── Routes ──
 
 @app.get("/")
@@ -395,6 +495,9 @@ async def root():
             "GET /v1/preview": "Interactive preview page",
             "POST /v1/brands": "Save a brand kit",
             "GET /v1/brands": "List saved brand kits",
+            "POST /v1/webshot": "Take a screenshot of any URL",
+            "POST /v1/scrape": "Scrape clean text/markdown from a URL",
+            "POST /v1/preview": "Get Open Graph / link preview metadata",
         }
     }
 
@@ -705,6 +808,61 @@ async def create_annotation(req: AnnotateRequest):
         )
     except Exception as e:
         raise HTTPException(500, f"Annotation render failed: {str(e)}")
+
+
+# ── Web Tools Routes ──
+
+@app.post("/v1/webshot")
+async def create_webshot(req: WebShotRequest):
+    """Take a screenshot of any URL. Returns PNG image."""
+    t0 = time.time()
+    
+    try:
+        png_bytes = await capture_url_screenshot(
+            url=req.url,
+            width=req.width,
+            height=req.height,
+            full_page=req.full_page,
+            device_scale_factor=req.device_scale_factor,
+        )
+        
+        return Response(
+            content=png_bytes,
+            media_type="image/png",
+            headers={
+                "X-Render-Time-Ms": f"{(time.time() - t0) * 1000:.1f}",
+                "X-Url": req.url[:200],
+                "Cache-Control": "public, max-age=300",
+            }
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Webshot failed: {str(e)}")
+
+
+@app.post("/v1/scrape")
+async def create_scrape(req: ScrapeRequest):
+    """Scrape clean text content from a URL. Returns JSON with title, text, links, metadata."""
+    t0 = time.time()
+    
+    try:
+        data = await scrape_url_text(url=req.url, format=req.format)
+        data["render_time_ms"] = round((time.time() - t0) * 1000, 1)
+        return data
+    except Exception as e:
+        raise HTTPException(500, f"Scrape failed: {str(e)}")
+
+
+@app.post("/v1/preview")
+async def create_preview(req: PreviewRequest):
+    """Get Open Graph / Twitter Card metadata for a URL. Returns JSON."""
+    t0 = time.time()
+    
+    try:
+        metadata = await get_link_preview(url=req.url)
+        metadata["render_time_ms"] = round((time.time() - t0) * 1000, 1)
+        return metadata
+    except Exception as e:
+        raise HTTPException(500, f"Preview failed: {str(e)}")
 
 
 @app.get("/health")
