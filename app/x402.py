@@ -1,5 +1,5 @@
 """
-x402 Payment Protocol — Exact Coinbase V1 fixture match.
+x402 V2 Protocol — exact x402scan fixture format.
 """
 import os, json, time, base64
 
@@ -7,42 +7,45 @@ EVM_PAYEE_ADDRESS = os.environ.get("EVM_PAYEE_ADDRESS", "")
 DOMAIN = os.environ.get("DOMAIN", "https://drmadmeow.up.railway.app")
 BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 MAX_PROOF_AGE = 300
+AGENT_PRICES = {"/v1/screenshot":"0.01","/v1/diff":"0.01","/v1/animate":"0.05","/v1/annotate":"0.03"}
 
-AGENT_PRICES = {
-    "/v1/screenshot": "0.01", "/v1/diff": "0.01",
-    "/v1/animate": "0.05", "/v1/annotate": "0.03",
-}
+def _schema(ep):
+    s = {
+        "screenshot":{"type":"object","required":["code"],"properties":{"code":{"type":"string"},"language":{"type":"string"}}},
+        "diff":{"type":"object","required":["old_code","new_code"],"properties":{"old_code":{"type":"string"},"new_code":{"type":"string"}}},
+        "animate":{"type":"object","required":["code"],"properties":{"code":{"type":"string"},"effect":{"type":"string","enum":["typewriter","reveal-line","fade-in"]}}},
+        "annotate":{"type":"object","required":["code"],"properties":{"code":{"type":"string"},"focus":{"type":"string","enum":["general","error-handling","performance","security","patterns"]}}},
+    }
+    return s.get(ep, s["screenshot"])
 
 def build_payment_required(path: str) -> dict:
     price = AGENT_PRICES.get(path, "0.01")
     ep = path.split("/")[-1]
+    body = _schema(ep)
     return {
-        "x402Version": 1,
+        "x402Version": 2,
         "accepts": [{
             "scheme": "exact",
-            "network": "base",
-            "maxAmountRequired": price,
-            "resource": f"{DOMAIN}{path}",
-            "description": f"CodeShot — {ep}",
-            "mimeType": "application/json",
+            "network": "eip155:8453",
+            "amount": price,
             "payTo": EVM_PAYEE_ADDRESS,
             "maxTimeoutSeconds": MAX_PROOF_AGE,
             "asset": BASE_USDC,
-            "outputSchema": {
-                "input": {"type": "http", "method": "POST"},
-                "output": {"type": "object"},
-            },
+            "extra": {},
         }],
+        "resource": {"url": f"{DOMAIN}{path}", "description": f"CodeShot — {ep}", "mimeType": "application/json"},
+        "extensions": {
+            "bazaar": {
+                "info": {
+                    "input": {"type": "http", "method": "POST", "bodyType": "json", "body": body},
+                    "output": {"type": "object", "properties": {"ok": {"type": "boolean"}}},
+                }
+            }
+        },
     }
 
 def build_openapi_payment_info(path: str) -> dict:
-    price = get_price(path)
-    return {
-        "x-payment-info": {
-            "protocols": [{"x402": {}}],
-            "price": {"mode": "fixed", "currency": "USD", "amount": price},
-        }
-    }
+    return {"x-payment-info":{"protocols":[{"x402":{}}],"price":{"mode":"fixed","currency":"USD","amount":get_price(path)}}}
 
 def verify_payment_signature(sig, payee, amount):
     if not sig: return False, "Missing"
