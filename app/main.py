@@ -4,6 +4,7 @@ CodeShot API — Beautiful code screenshots via REST API.
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import Response, HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 import time
@@ -40,6 +41,15 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url=None,       # disable redoc (relies on openapi.json)
     openapi_url="/openapi.json",  # point swagger to our custom x402 spec
+)
+
+# CORS — allow x402scan frontend to probe our endpoints
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["PAYMENT-REQUIRED", "PAYMENT-SIGNATURE", "SIGN-IN-WITH-X"],
 )
 
 # Override FastAPI's auto-generated OpenAPI with x402 agent spec
