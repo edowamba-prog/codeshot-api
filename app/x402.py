@@ -47,35 +47,27 @@ def _schema(ep):
 
 
 def build_payment_required(path: str) -> dict:
-    """V2 format for AgentCash compatibility — matches x402scan baseV2 fixture."""
+    """V1 format — matches x402scan validator fixture baseV1 exactly."""
     lookup = _strip_agent(path)
     price = AGENT_PRICES_USDC.get(lookup, 10000)
     ep = path.split("/")[-1]
-    body = _schema(ep)
     return {
-        "x402Version": 2,
+        "x402Version": 1,
         "accepts": [{
             "scheme": "exact",
-            "network": "eip155:8453",
-            "amount": str(price),
+            "network": "base",
+            "maxAmountRequired": str(price),
+            "resource": f"{DOMAIN}{path}",
+            "description": f"CodeShot — {ep}",
+            "mimeType": "application/json",
             "payTo": EVM_PAYEE_ADDRESS,
             "maxTimeoutSeconds": MAX_PROOF_AGE,
             "asset": BASE_USDC,
-            "extra": {},
-        }],
-        "resource": {
-            "url": f"{DOMAIN}{path}",
-            "description": f"CodeShot — {ep}",
-            "mimeType": "application/json",
-        },
-        "extensions": {
-            "bazaar": {
-                "info": {
-                    "input": {"type": "http", "method": "POST", "bodyType": "json", "body": body},
-                    "output": {"type": "object", "properties": {"ok": {"type": "boolean"}}},
-                },
+            "outputSchema": {
+                "input": {"type": "http", "method": "POST"},
+                "output": {"type": "object"},
             },
-        },
+        }],
     }
 
 
