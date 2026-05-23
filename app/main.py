@@ -61,9 +61,12 @@ def custom_openapi():
         "openapi": "3.1.0",
         "info": {
             "title": "CodeShot API",
-            "description": "Beautiful code screenshots via API. Pay-per-use for AI agents via x402.",
+            "description": "Beautiful code screenshots and web tools via API. Pay-per-use for AI agents via x402 and MPP.",
             "version": "1.0.0",
-            "x-guidance": "Use POST /v1/agent/screenshot to generate code screenshots. Payment required via x402. Send X-Payment-Proof header.",
+            "x-guidance": "Use POST /v1/agent/screenshot for code screenshots, POST /v1/agent/webshot for URL screenshots, POST /v1/agent/scrape for web scraping, POST /v1/agent/preview for link previews. All endpoints require payment via x402 or MPP. Send PAYMENT-SIGNATURE header.",
+        },
+        "x-discovery": {
+            "ownershipProofs": []
         },
         "servers": [{"url": domain}],
         "paths": {

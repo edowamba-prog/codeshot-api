@@ -75,13 +75,18 @@ def build_payment_required(path: str) -> dict:
 
 def build_openapi_payment_info(path: str) -> dict:
     price_str = AGENT_PRICES_USD.get(_strip_agent(path), "0.01")
+    # Format with 6 decimal places for AgentCash compatibility
+    price_formatted = f"{float(price_str):.6f}"
     return {
         "x-payment-info": {
-            "protocols": [{"x402": {}}],
+            "protocols": [
+                {"x402": {}},
+                {"mpp": {"method": "", "intent": "", "currency": ""}},
+            ],
             "price": {
                 "mode": "fixed",
                 "currency": "USD",
-                "amount": price_str,
+                "amount": price_formatted,
             },
         }
     }
