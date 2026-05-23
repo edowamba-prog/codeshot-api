@@ -7,14 +7,15 @@ EVM_PAYEE_ADDRESS = os.environ.get("EVM_PAYEE_ADDRESS", "0xed6881b56690C26189d91
 DOMAIN = os.environ.get("DOMAIN", "https://drmadmeow.up.railway.app")
 BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 MAX_PROOF_AGE = 300
+# Prices in smallest USDC unit (6 decimals). $0.01 = 10000, $0.05 = 50000, etc.
 AGENT_PRICES = {
-    "/v1/screenshot": "0.01",
-    "/v1/diff": "0.01",
-    "/v1/animate": "0.05",
-    "/v1/annotate": "0.03",
-    "/v1/webshot": "0.01",
-    "/v1/scrape": "0.01",
-    "/v1/preview": "0.005",
+    "/v1/screenshot": 10000,
+    "/v1/diff": 10000,
+    "/v1/animate": 50000,
+    "/v1/annotate": 30000,
+    "/v1/webshot": 10000,
+    "/v1/scrape": 10000,
+    "/v1/preview": 5000,
 }
 
 def _schema(ep):
@@ -30,7 +31,7 @@ def _schema(ep):
     return s.get(ep, s["screenshot"])
 
 def build_payment_required(path: str) -> dict:
-    price = AGENT_PRICES.get(path, "0.01")
+    price = AGENT_PRICES.get(path, 10000)
     ep = path.split("/")[-1]
     body = _schema(ep)
     return {
@@ -75,4 +76,4 @@ def verify_payment_signature(sig, payee, amount):
 
 is_x402_path = lambda p: p.startswith("/v1/agent/")
 agent_path_to_real = lambda p: p.replace("/v1/agent/", "/v1/")
-get_price = lambda p: AGENT_PRICES.get(agent_path_to_real(p), "0.01") if is_x402_path(p) else AGENT_PRICES.get(p, "0.01")
+get_price = lambda p: AGENT_PRICES.get(agent_path_to_real(p), 10000) if is_x402_path(p) else AGENT_PRICES.get(p, 10000)
