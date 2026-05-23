@@ -186,10 +186,33 @@ def custom_openapi():
                     "responses": {"200": {"description": "Rendered code diff as PNG image", "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}}, "402": {"description": "Payment required"}},
                 }
             },
+            "/v1/agent/health": {
+                "get": {
+                    "summary": "API health check (free)",
+                    "description": "Free SIWX-authenticated health check. No payment required.",
+                    "operationId": "agentHealth",
+                    "security": [{"siwx": []}],
+                    "responses": {"200": {"description": "Service status"}},
+                }
+            },
+        },
+        "components": {
+            "securitySchemes": {
+                "siwx": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "description": "Sign-In-With-X wallet authentication"
+                }
+            }
         },
     }
 
 app.openapi = custom_openapi
+
+# Free SIWX endpoint — wallet-verified, no payment
+@app.get("/v1/agent/health")
+async def agent_health():
+    return {"status": "ok", "service": "codeshot-api", "auth": "siwx"}
 
 # ── x402 Well-Known (compatibility discovery) ──
 

@@ -1,0 +1,29 @@
+{
+  "name": "code-shot-api",
+  "version": "1.0.0",
+  "description": "**Beautiful code screenshots via REST API.** No editor. No clicking. Just ship.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edowamba-prog/codeshot-api.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/edowamba-prog/codeshot-api/issues"
+  },
+  "homepage": "https://github.com/edowamba-prog/codeshot-api#readme",
+  "dependencies": {
+    "@x402/core": "^2.13.0",
+    "@x402/evm": "^2.13.0",
+    "@x402/express": "^2.13.0",
+    "express": "^5.2.1"
+  }
+}
