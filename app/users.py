@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel, Field
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+# Use DATA_DIR env var for Railway persistent volumes, fallback to local
+DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent.parent / "data"))
 DB_PATH = DATA_DIR / "users.db"
 
 # JWT secret — set in env, or auto-generate

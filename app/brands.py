@@ -4,11 +4,13 @@ Brand kit store — persistent storage for custom brand configurations.
 
 import json
 import asyncio
+import os
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel, Field
 
-STORE_PATH = Path(__file__).parent.parent / "data" / "brands.json"
+DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent.parent / "data"))
+STORE_PATH = DATA_DIR / "brands.json"
 
 
 class BrandKit(BaseModel):

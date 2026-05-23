@@ -14,7 +14,8 @@ DOMAIN = os.environ.get("DOMAIN", "https://drmadmeow.up.railway.app")
 from typing import Optional
 from collections import defaultdict
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+# Use DATA_DIR env var for Railway persistent volumes, fallback to local
+DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent.parent / "data"))
 KEYS_PATH = DATA_DIR / "api_keys.json"
 USAGE_PATH = DATA_DIR / "usage.json"
 
