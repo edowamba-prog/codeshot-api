@@ -52,13 +52,12 @@ def build_payment_required(path: str) -> dict:
     lookup = _strip_agent(path)
     price = AGENT_PRICES_USDC.get(lookup, 10000)
     ep = path.split("/")[-1]
-    body = _schema(ep)
     return {
         "x402Version": 1,
         "accepts": [{
             "scheme": "exact",
             "network": "base",
-            "maxAmountRequired": price,
+            "maxAmountRequired": str(price),
             "resource": f"{DOMAIN}{path}",
             "description": f"CodeShot — {ep}",
             "mimeType": "application/json",
@@ -66,8 +65,8 @@ def build_payment_required(path: str) -> dict:
             "maxTimeoutSeconds": MAX_PROOF_AGE,
             "asset": BASE_USDC,
             "outputSchema": {
-                "input": {"type": "http", "method": "POST", "bodyType": "json", "body": body},
-                "output": {"type": "object", "properties": {"ok": {"type": "boolean"}}},
+                "input": {"type": "http", "method": "POST"},
+                "output": {"type": "object"},
             },
         }],
     }
