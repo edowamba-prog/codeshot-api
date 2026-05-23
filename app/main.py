@@ -341,6 +341,7 @@ class X402Middleware(_BaseMW):
                 return JSONResponse(
                     pr,
                     status_code=402,
+                    headers={"PAYMENT-REQUIRED": "1"},
                 )
             
             # Verify payment signature (uses USDC integer amount)
