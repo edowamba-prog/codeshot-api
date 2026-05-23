@@ -75,6 +75,7 @@ def custom_openapi():
                     "summary": "Code screenshot — $0.01",
                     "description": "Render code as a beautiful PNG screenshot. Pay-per-use via x402.",
                     "operationId": "createScreenshot",
+                    "security": [],
                     
                     "x-payment-info": build_openapi_payment_info("/v1/agent/screenshot")["x-payment-info"],
                     "requestBody": {
@@ -108,6 +109,7 @@ def custom_openapi():
                     "summary": "Code diff — $0.01",
                     "description": "Render code diff as PNG. Pay-per-use via x402.",
                     "operationId": "createDiff",
+                    "security": [],
                     
                     "x-payment-info": build_openapi_payment_info("/v1/agent/diff")["x-payment-info"],
                     "requestBody": {
@@ -137,6 +139,7 @@ def custom_openapi():
                     "summary": "Animated code — $0.05",
                     "description": "Render animated code as MP4/GIF. Pay-per-use via x402.",
                     "operationId": "createAnimation",
+                    "security": [],
                     
                     "x-payment-info": build_openapi_payment_info("/v1/agent/animate")["x-payment-info"],
                     "requestBody": {
@@ -167,6 +170,7 @@ def custom_openapi():
                     "summary": "AI-annotated code — $0.03",
                     "description": "AI analyzes and annotates code. Pay-per-use via x402.",
                     "operationId": "createAnnotation",
+                    "security": [],
                     
                     "x-payment-info": build_openapi_payment_info("/v1/agent/annotate")["x-payment-info"],
                     "requestBody": {
@@ -204,6 +208,7 @@ def custom_openapi():
                     "summary": "Web screenshot — $0.01",
                     "description": "Take a screenshot of any URL. Pay-per-use via x402.",
                     "operationId": "createWebshot",
+                    "security": [],
                     "x-payment-info": build_openapi_payment_info("/v1/agent/webshot")["x-payment-info"],
                     "requestBody": {
                         "required": True,
@@ -231,6 +236,7 @@ def custom_openapi():
                     "summary": "Web scrape — $0.01",
                     "description": "Scrape clean text/markdown from any URL. Pay-per-use via x402.",
                     "operationId": "createScrape",
+                    "security": [],
                     "x-payment-info": build_openapi_payment_info("/v1/agent/scrape")["x-payment-info"],
                     "requestBody": {
                         "required": True,
@@ -256,6 +262,7 @@ def custom_openapi():
                     "summary": "Link preview — $0.005",
                     "description": "Get Open Graph / Twitter Card metadata for any URL. Pay-per-use via x402.",
                     "operationId": "createPreview",
+                    "security": [],
                     "x-payment-info": build_openapi_payment_info("/v1/agent/preview")["x-payment-info"],
                     "requestBody": {
                         "required": True,
@@ -330,13 +337,10 @@ class X402Middleware(_BaseMW):
             price_usdc = get_price_usdc(path)
             
             if not proof:
-                import base64 as _b64
                 pr = build_payment_required(path)
-                body_b64 = _b64.b64encode(json.dumps(pr).encode()).decode()
                 return JSONResponse(
                     pr,
                     status_code=402,
-                    headers={"PAYMENT-REQUIRED": body_b64},
                 )
             
             # Verify payment signature (uses USDC integer amount)

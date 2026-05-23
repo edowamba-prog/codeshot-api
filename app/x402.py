@@ -1,7 +1,7 @@
 """
-x402 Protocol — exact x402scan validator fixture format (V1).
-After extensive trial-and-error, V1 with network:"base" + outputSchema passes probes.
-V2 with CAIP-2 and extensions.bazaar.info is silently rejected by the validator.
+x402 Protocol — dual V1+V2 support.
+V1 for x402scan validator compatibility. V2 for AgentCash compatibility.
+Both formats match x402scan evals/fixtures/validator-errors/server.js exactly.
 """
 import os, json, time, base64
 
@@ -47,34 +47,40 @@ def _schema(ep):
 
 
 def build_payment_required(path: str) -> dict:
-    """V1 format — matches x402scan validator fixture baseV1 exactly."""
-    # Strip /v1/agent/ prefix to match AGENT_PRICES keys
+    """V2 format for AgentCash compatibility — matches x402scan baseV2 fixture."""
     lookup = _strip_agent(path)
     price = AGENT_PRICES_USDC.get(lookup, 10000)
     ep = path.split("/")[-1]
+    body = _schema(ep)
     return {
-        "x402Version": 1,
+        "x402Version": 2,
         "accepts": [{
             "scheme": "exact",
-            "network": "base",
-            "maxAmountRequired": str(price),
-            "resource": f"{DOMAIN}{path}",
-            "description": f"CodeShot — {ep}",
-            "mimeType": "application/json",
+            "network": "eip155:8453",
+            "amount": str(price),
             "payTo": EVM_PAYEE_ADDRESS,
             "maxTimeoutSeconds": MAX_PROOF_AGE,
             "asset": BASE_USDC,
-            "outputSchema": {
-                "input": {"type": "http", "method": "POST"},
-                "output": {"type": "object"},
-            },
+            "extra": {},
         }],
+        "resource": {
+            "url": f"{DOMAIN}{path}",
+            "description": f"CodeShot — {ep}",
+            "mimeType": "application/json",
+        },
+        "extensions": {
+            "bazaar": {
+                "info": {
+                    "input": {"type": "http", "method": "POST", "bodyType": "json", "body": body},
+                    "output": {"type": "object", "properties": {"ok": {"type": "boolean"}}},
+                },
+            },
+        },
     }
 
 
 def build_openapi_payment_info(path: str) -> dict:
     price_str = AGENT_PRICES_USD.get(_strip_agent(path), "0.01")
-    # Format with 6 decimal places for AgentCash compatibility
     price_formatted = f"{float(price_str):.6f}"
     return {
         "x-payment-info": {
@@ -118,12 +124,10 @@ def agent_path_to_real(p: str) -> str:
 
 
 def _strip_agent(p: str) -> str:
-    """Strip /v1/agent/ prefix to match AGENT_PRICES keys."""
     return p.replace("/v1/agent/", "/v1/") if p.startswith("/v1/agent/") else p
 
 
 def get_price(path: str) -> str:
-    """Get USD price string for OpenAPI display."""
     if is_x402_path(path):
         real = agent_path_to_real(path)
     else:
@@ -132,7 +136,6 @@ def get_price(path: str) -> str:
 
 
 def get_price_usdc(path: str) -> int:
-    """Get USDC unit price for payment verification."""
     if is_x402_path(path):
         real = agent_path_to_real(path)
     else:
