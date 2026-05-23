@@ -3,7 +3,7 @@ x402 V2 Protocol — exact x402scan fixture format.
 """
 import os, json, time, base64
 
-EVM_PAYEE_ADDRESS = os.environ.get("EVM_PAYEE_ADDRESS", "")
+EVM_PAYEE_ADDRESS = os.environ.get("EVM_PAYEE_ADDRESS", "0xed6881b56690C26189d914F2302C9af79685CB97")
 DOMAIN = os.environ.get("DOMAIN", "https://drmadmeow.up.railway.app")
 BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 MAX_PROOF_AGE = 300
