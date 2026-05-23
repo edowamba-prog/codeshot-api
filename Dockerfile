@@ -1,4 +1,5 @@
 # CodeShot API — Production Dockerfile
+# Persistent data at /data (Railway volume mount)
 
 FROM python:3.12-slim
 
@@ -18,11 +19,14 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw
 RUN python3 -m playwright install --with-deps chromium
 
 COPY app/ ./app/
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
+# Create non-root user for the app process
 RUN useradd -m app && chown -R app:app /app /opt/pw
-USER app
 
 EXPOSE 8000
 ENV PYTHONUNBUFFERED=1
 
-CMD ["sh", "-c", "python3 -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Entrypoint runs as root to fix /data permissions, then drops to app user
+ENTRYPOINT ["/entrypoint.sh"]
