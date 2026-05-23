@@ -507,6 +507,7 @@ async def root():
             "POST /v1/webshot": "Take a screenshot of any URL",
             "POST /v1/scrape": "Scrape clean text/markdown from a URL",
             "POST /v1/preview": "Get Open Graph / link preview metadata",
+            "POST /v1/feedback": "Submit feedback or complaint",
         }
     }
 
@@ -1218,6 +1219,72 @@ async def admin_revoke_key(key_id: str, _admin: bool = Depends(require_admin)):
 @app.on_event("startup")
 async def on_startup():
     await create_default_key()
+
+
+# ── Feedback / Complaints ──
+
+from pydantic import BaseModel as _BM
+
+class FeedbackRequest(_BM):
+    email: str
+    category: str = "other"  # bug, feature, complaint, praise, other
+    message: str
+
+
+@app.post("/v1/feedback")
+async def submit_feedback(req: FeedbackRequest):
+    """Submit feedback or a complaint. Stored and emailed to admin."""
+    from .notify import submit_feedback as sf
+    result = sf(req.email, req.category, req.message)
+    return result
+
+
+@app.get("/admin/feedback")
+async def admin_feedback(_admin: bool = Depends(require_admin)):
+    """Admin page showing all feedback entries."""
+    from .notify import load_feedback, get_feedback_stats
+    stats = get_feedback_stats()
+    entries = load_feedback()
+    
+    rows = ""
+    for e in reversed(entries):
+        emoji = {"bug":"🐛","feature":"💡","complaint":"🚨","praise":"🎉","other":"📬"}.get(e["category"],"📬")
+        resolved = "✅" if e["resolved"] else "❌"
+        rows += f"""
+        <tr>
+          <td>{emoji} {e['category']}</td>
+          <td>{e['email']}</td>
+          <td style="max-width:400px;word-break:break-word">{e['message']}</td>
+          <td>{e['created_at'][:19]}</td>
+          <td>{resolved}</td>
+        </tr>"""
+    
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html><head><title>CodeShot — Feedback</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:system-ui;background:#0a0a0a;color:#e2e8f0}}
+.nav{{display:flex;justify-content:space-between;align-items:center;padding:14px 24px;background:#111827;border-bottom:1px solid #1e293b}}
+.nav h1{{font-size:17px;color:#f8fafc}}.nav a{{color:#3b82f6;text-decoration:none;font-size:13px}}
+.container{{max-width:1000px;margin:0 auto;padding:24px}}
+.stats{{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}}
+.stat{{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:16px 20px;text-align:center}}
+.stat-num{{font-size:24px;font-weight:800;color:#3b82f6}}.stat-label{{font-size:11px;color:#64748b;text-transform:uppercase}}
+table{{width:100%;border-collapse:collapse;font-size:13px}}
+th,td{{padding:10px 14px;text-align:left;border-bottom:1px solid #1e293b}}
+th{{color:#64748b;font-size:11px;text-transform:uppercase}}
+</style></head><body>
+<div class="nav"><h1>📬 CodeShot — Feedback</h1>
+<div><a href="/admin">← Admin</a></div></div>
+<div class="container">
+<div class="stats">
+  <div class="stat"><div class="stat-num">{stats['total']}</div><div class="stat-label">Total</div></div>
+  <div class="stat"><div class="stat-num">{stats['unresolved']}</div><div class="stat-label">Unresolved</div></div>
+</div>
+<table><thead><tr><th>Category</th><th>Email</th><th>Message</th><th>Time</th><th>Status</th></tr></thead>
+<tbody>{rows}</tbody></table>
+</div></body></html>""")
 
 
 @app.on_event("shutdown")

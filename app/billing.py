@@ -80,6 +80,13 @@ async def handle_webhook(payload: bytes, signature: str) -> dict:
         }
         mapping_path.write_text(json.dumps(mappings))
         
+        # Notify admin of new payment
+        try:
+            from .notify import notify_payment
+            notify_payment(customer_email, plan)
+        except Exception:
+            pass
+        
         return {"status": "ok", "plan": plan, "email": customer_email}
     
     return {"status": "ignored", "type": event["type"]}

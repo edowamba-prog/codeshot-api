@@ -111,6 +111,14 @@ def create_user(email: str, password: str, name: Optional[str] = None) -> dict:
             (user_id, email.lower().strip(), hash_password(password), name, "free", now)
         )
         conn.commit()
+        
+        # Notify admin of new registration
+        try:
+            from .notify import notify_new_user
+            notify_new_user(email, name or "Unknown", "free")
+        except Exception:
+            pass
+        
         return {"id": user_id, "email": email, "name": name, "plan": "free", "created_at": now}
     except sqlite3.IntegrityError:
         raise ValueError("Email already registered")
